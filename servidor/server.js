@@ -390,6 +390,25 @@ app.post('/api/ventas', autenticar, (req, res) => {
         });
     });
 });
+
+/* =====================================================
+   VENTAS: CORREGIR, ANULAR (eliminación lógica) Y ELIMINAR (física)
+   ===================================================== */
+
+// Siguiente número correlativo de una serie (B001 para Boleta, F001 para Factura)
+function siguienteNumero(tipoDoc, callback) {
+    const prefijo = tipoDoc === 'Boleta' ? 'B001' : 'F001';
+    const query = `
+        SELECT MAX(CAST(SUBSTRING_INDEX(numero_doc, '-', -1) AS UNSIGNED)) AS ultimo
+        FROM Venta
+        WHERE tipo_doc = ?;
+    `;
+    db.query(query, [tipoDoc], (err, r) => {
+        if (err) return callback(err);
+        callback(null, `${prefijo}-${String((r[0].ultimo || 0) + 1).padStart(6, '0')}`);
+    });
+}
+
 // ACTUALIZAR una venta vigente: cliente, tipo de comprobante y cantidades.
 // Body: { docType, customer, items: [{ id (producto), qty }] }
 app.put('/api/ventas/:codigo', autenticar, (req, res) => {
