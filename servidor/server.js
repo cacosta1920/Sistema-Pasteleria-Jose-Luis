@@ -1,4 +1,43 @@
+const express = require('express');
+const mysql = require('mysql2');
+const cors = require('cors');
+const crypto = require('crypto');   // incluido en Node: hash de contraseñas y tokens de sesión
+
+const app = express();
+app.use(cors());
+app.use(express.json({ limit: '100kb' }));
+
+// Conexión a la base de datos pasteleria
+const db = mysql.createConnection({
+    host: 'localhost',
+    user: 'root',
+    password: 'admin',
+    database: 'pasteleria',
+    decimalNumbers: true   // devuelve los DECIMAL como números y no como texto
+});
+
+db.connect(err => {
+    if (err) {
+        console.error('Error al conectar a la BD pasteleria:', err);
+        return;
+    }
+    console.log('Conectado exitosamente a la base de datos pasteleria');
+    protegerContrasenas();
+});
+
+
+
+/* =====================================================
+   VALIDACIONES (tipo de dato, longitud y rango)
+   ===================================================== */
+const CATEGORIAS = ['Tortas', 'Individuales', 'Salados'];
 const ROLES = ['Administrador', 'Encargado de Ventas'];
+
+const esNumero = (v, min, max) => typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max;
+const esEntero = (v, min, max) => Number.isInteger(v) && v >= min && v <= max;
+const dosDecimales = v => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6;
+const texto = v => (typeof v === 'string' ? v.trim() : '');
+
 // Política de contraseña: 8+ caracteres, minúscula, mayúscula, dígito y símbolo especial
 function errorPassword(p) {
     if (typeof p !== 'string') return 'La contraseña es obligatoria';
@@ -11,6 +50,167 @@ function errorPassword(p) {
     if (!/[^A-Za-z0-9\s]/.test(p)) faltan.push('un símbolo especial');
     return faltan.length ? 'La contraseña debe tener ' + faltan.join(', ') : null;
 }
+
+function validarProducto(b) {
+    const name = texto(b.name);
+    if (name.length < 2 || name.length > 100) return { error: 'El nombre debe tener entre 2 y 100 caracteres' };
+    if (!CATEGORIAS.includes(b.category)) return { error: 'La categoría no es válida' };
+    if (!esNumero(b.price, 0.1, 9999.99) || !dosDecimales(b.price)) {
+        return { error: 'El precio debe estar entre S/ 0.10 y S/ 9999.99 (máximo 2 decimales)' };
+    }
+    if (!esEntero(b.stock, 0, 9999)) return { error: 'El stock debe ser un número entero entre 0 y 9999' };
+    const image = texto(b.image);
+    if (image.length > 255 || !/^https?:\/\/\S+$/i.test(image)) {
+        return { error: 'La imagen debe ser una URL http(s) de hasta 255 caracteres' };
+    }
+    return { datos: { name, category: b.category, price: b.price, stock: b.stock, image } };
+}
+
+function validarUsuario(b, esNuevo) {
+    const username = texto(b.username);
+    if (!/^[A-Za-z0-9_.]{4,30}$/.test(username)) {
+        return { error: 'El usuario debe tener de 4 a 30 caracteres (letras, números, punto o guion bajo)' };
+    }
+    const name = texto(b.name);
+    if (name.length < 3 || name.length > 80) return { error: 'El nombre completo debe tener entre 3 y 80 caracteres' };
+    if (!ROLES.includes(b.role)) return { error: 'El rol no es válido' };
+
+    let password;
+    if (esNuevo || (typeof b.password === 'string' && b.password !== '')) {
+        const e = errorPassword(b.password);
+        if (e) return { error: e };
+        password = b.password;
+    }
+    return { datos: { username, name, role: b.role, password } };
+}
+
+/* =====================================================
+   CONTRASEÑAS (hash con scrypt, sin librerías externas)
+   ===================================================== */
+function hashPassword(plano) {
+    const sal = crypto.randomBytes(16).toString('hex');
+    const hash = crypto.scryptSync(plano, sal, 32).toString('hex');
+    return `scrypt$${sal}$${hash}`;
+}
+
+function verificarPassword(plano, guardado) {
+    if (typeof guardado !== 'string') return false;
+    const partes = guardado.split('$');
+    if (partes.length !== 3 || partes[0] !== 'scrypt') return false;
+    const esperado = Buffer.from(partes[2], 'hex');
+    if (esperado.length === 0) return false;
+    const calculado = crypto.scryptSync(plano, partes[1], esperado.length);
+    return crypto.timingSafeEqual(calculado, esperado);
+}
+
+
+
+// Al iniciar, convierte a hash cualquier contraseña que aún esté en texto plano
+function protegerContrasenas() {
+    const query = "SELECT codigo_usuario, password FROM Usuario WHERE password NOT LIKE 'scrypt$%'";
+    db.query(query, (err, filas) => {
+        if (err) return console.error('No se pudieron revisar las contraseñas:', err.message);
+        filas.forEach(f => {
+            const q = 'UPDATE Usuario SET password = ? WHERE codigo_usuario = ?';
+            db.query(q, [hashPassword(f.password), f.codigo_usuario], err => {
+                if (err) console.error('No se pudo proteger la contraseña:', err.message);
+            });
+        });
+        if (filas.length > 0) console.log(`Contraseñas protegidas con hash: ${filas.length}`);
+    });
+}
+
+// Respuesta de error común para todos los endpoints
+function responderError(res, err, mensajeDuplicado) {
+    if (err.code === 'ER_DUP_ENTRY') {
+        return res.status(409).json({ message: mensajeDuplicado || 'Ya existe un registro con ese valor' });
+    }
+    if (err.code === 'ER_ROW_IS_REFERENCED_2') {
+        return res.status(409).json({
+            message: 'No se puede eliminar definitivamente: tiene ventas registradas. Puedes desactivarlo.'
+        });
+    }
+    res.status(500).json({ error: err.message });
+}
+
+function idValido(req, res, parametro = 'id') {
+    const id = Number(req.params[parametro]);
+    if (!Number.isInteger(id) || id <= 0) {
+        res.status(400).json({ message: 'Identificador no válido' });
+        return null;
+    }
+    return id;
+}
+
+/* =====================================================
+   SESIONES Y AUTORIZACIÓN
+   ===================================================== */
+const sesiones = new Map();                      // token -> datos del usuario
+const DURACION_SESION = 8 * 60 * 60 * 1000;      // 8 horas
+
+// Exige un token válido (cualquier perfil)
+function autenticar(req, res, next) {
+    const cabecera = req.headers.authorization || '';
+    const token = cabecera.startsWith('Bearer ') ? cabecera.slice(7) : '';
+    const sesion = sesiones.get(token);
+    if (!sesion || sesion.expira < Date.now()) {
+        sesiones.delete(token);
+        return res.status(401).json({ message: 'Sesión no válida o expirada' });
+    }
+    req.usuario = sesion;
+    req.token = token;
+    next();
+}
+
+// Exige además el perfil de administrador
+function soloAdmin(req, res, next) {
+    if (req.usuario.role !== 'Administrador') {
+        return res.status(403).json({ message: 'Acceso restringido a administradores' });
+    }
+    next();
+}
+
+function cerrarSesionesDe(idUsuario) {
+    for (const [token, s] of sesiones) {
+        if (s.id === idUsuario) sesiones.delete(token);
+    }
+}
+
+/* =====================================================
+   LOGIN / LOGOUT
+   ===================================================== */
+app.post('/api/login', (req, res) => {
+    const { username, password } = req.body || {};
+    const usuario = texto(username);
+    if (!usuario || usuario.length > 30 || typeof password !== 'string' || !password || password.length > 64) {
+        return res.status(400).json({ message: 'Ingresa un usuario y una contraseña válidos' });
+    }
+
+    const query = `
+        SELECT codigo_usuario AS id, username, nombre AS name, rol AS role, password, estado
+        FROM Usuario
+        WHERE username = ?;
+    `;
+    db.query(query, [usuario], (err, result) => {
+        if (err) return responderError(res, err);
+        if (result.length === 0 || !verificarPassword(password, result[0].password)) {
+            return res.status(401).json({ message: 'Credenciales inválidas' });
+        }
+        const u = result[0];
+        if (u.estado !== 1) return res.status(403).json({ message: 'Usuario inactivo. Contacta al administrador' });
+
+        const token = crypto.randomBytes(32).toString('hex');
+        const datos = { id: u.id, username: u.username, name: u.name, role: u.role };
+        sesiones.set(token, { ...datos, expira: Date.now() + DURACION_SESION });
+        res.json({ token, usuario: datos });
+    });
+});
+
+app.post('/api/logout', autenticar, (req, res) => {
+    sesiones.delete(req.token);
+    res.json({ message: 'Sesión cerrada' });
+});
+
 /* =====================================================
    PRODUCTOS
    (ver: cualquier perfil | crear, editar, desactivar y eliminar: solo admin)
@@ -182,6 +382,7 @@ app.delete('/api/usuarios/:id', autenticar, soloAdmin, (req, res) => {
         res.json({ message: 'Usuario eliminado definitivamente' });
     });
 });
+
 /* =====================================================
    VENTAS (cualquier perfil con sesión iniciada)
    ===================================================== */
@@ -262,8 +463,8 @@ app.get('/api/ventas/:codigo', autenticar, (req, res) => {
         res.json(ventas[0]);
     });
 });
+
 // Registrar una venta (con transacción)
-// Body: { docType, customer, paid, items: [{ id, qty }] }
 // El vendedor se toma de la sesión, no del cuerpo de la petición.
 app.post('/api/ventas', autenticar, (req, res) => {
     const { docType, customer, paid, items } = req.body || {};
@@ -410,7 +611,6 @@ function siguienteNumero(tipoDoc, callback) {
 }
 
 // ACTUALIZAR una venta vigente: cliente, tipo de comprobante y cantidades.
-// Body: { docType, customer, items: [{ id (producto), qty }] }
 app.put('/api/ventas/:codigo', autenticar, (req, res) => {
     const codigo = idValido(req, res, 'codigo');
     if (codigo === null) return;
@@ -597,4 +797,29 @@ app.delete('/api/ventas/:codigo', autenticar, soloAdmin, (req, res) => {
             });
         });
     });
+});
+
+/* =====================================================
+   DASHBOARD
+   ===================================================== */
+app.get('/api/ventas-resumen/mensual', autenticar, (req, res) => {
+    const query = `
+        SELECT mes, cantidad_ventas AS cantidadVentas, monto_total AS montoTotal
+        FROM HistorialMensual
+        ORDER BY codigo_mes;
+    `;
+    db.query(query, (err, result) => {
+        if (err) return responderError(res, err);
+        res.json(result);
+    });
+});
+
+// JSON mal formado u otros errores de la petición
+app.use((err, req, res, next) => {
+    res.status(400).json({ message: 'Solicitud no válida' });
+});
+
+const PORT = 3000;
+app.listen(PORT, () => {
+    console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });

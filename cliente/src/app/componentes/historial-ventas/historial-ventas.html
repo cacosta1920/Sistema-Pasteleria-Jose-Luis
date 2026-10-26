@@ -1,0 +1,179 @@
+<section class="space-y-6">
+  <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
+
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+      <div>
+        <h2 class="font-serif text-xl font-bold text-slate-800">Historial de Operaciones</h2>
+        <p class="text-xs text-slate-500">Consulta, corrige, anula y reemite comprobantes de ventas.</p>
+      </div>
+
+      <!-- Filtros -->
+      <div class="flex flex-wrap items-center gap-2">
+        <input type="date" name="fecha" [ngModel]="fecha()" (ngModelChange)="fecha.set($event)"
+               class="px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-pastry-500">
+
+        <div class="relative">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+            <i class="fa-solid fa-magnifying-glass text-xs"></i>
+          </span>
+          <input type="text" name="texto" maxlength="100" [ngModel]="texto()" (ngModelChange)="texto.set($event)"
+                 placeholder="Buscar cliente / ticket..."
+                 class="pl-8 pr-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-pastry-500 w-48">
+        </div>
+
+        <label class="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer">
+          <input type="checkbox" [checked]="verAnuladas()" (change)="verAnuladas.set($any($event.target).checked)">
+          Mostrar anuladas ({{ anuladas() }})
+        </label>
+
+        <button (click)="limpiarFiltros()"
+                class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold rounded-xl transition">
+          Limpiar
+        </button>
+      </div>
+    </div>
+
+    <!-- Tabla del historial -->
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs">
+        <thead class="bg-slate-50 text-slate-500 uppercase tracking-wider font-bold">
+          <tr>
+            <th class="p-3 rounded-l-xl">N° Comprobante</th>
+            <th class="p-3">Fecha y Hora</th>
+            <th class="p-3">Cliente</th>
+            <th class="p-3">Atendido por</th>
+            <th class="p-3">Total (S/)</th>
+            <th class="p-3">Estado</th>
+            <th class="p-3 rounded-r-xl text-center">Acciones</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
+          @for (v of ventasFiltradas(); track v.codigo) {
+            <tr class="hover:bg-slate-50 transition" [class.opacity-60]="v.estado === 0">
+              <td class="p-3 font-mono font-bold text-pastry-800" [class.line-through]="v.estado === 0">{{ v.id }}</td>
+              <td class="p-3 text-slate-500">{{ v.date }}</td>
+              <td class="p-3 font-semibold text-slate-800">{{ v.customer }}</td>
+              <td class="p-3 text-slate-600">{{ v.user }}</td>
+              <td class="p-3 font-mono font-black text-slate-900">S/ {{ v.total.toFixed(2) }}</td>
+              <td class="p-3">
+                @if (v.estado === 0) {
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700">Anulada</span>
+                } @else {
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">Confirmado</span>
+                }
+              </td>
+              <td class="p-3 text-center whitespace-nowrap space-x-1">
+                <button (click)="verTicket(v)" title="Ver ticket"
+                        class="px-2.5 py-1 bg-pastry-100 text-pastry-700 hover:bg-pastry-600 hover:text-white rounded-lg transition text-[11px] font-bold">
+                  <i class="fa-solid fa-receipt"></i> Ticket
+                </button>
+                @if (v.estado === 0) {
+                  @if (esAdmin()) {
+                    <button (click)="eliminar(v)" title="Eliminar definitivamente" class="p-1.5 text-red-600 hover:bg-red-50 rounded">
+                      <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                  }
+                } @else {
+                  <button (click)="abrirEdicion(v)" title="Corregir venta" class="p-1.5 text-blue-600 hover:bg-blue-50 rounded">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                  </button>
+                  <button (click)="anular(v)" title="Anular (eliminación lógica)" class="p-1.5 text-amber-600 hover:bg-amber-50 rounded">
+                    <i class="fa-solid fa-ban"></i>
+                  </button>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="7" class="text-center py-8 text-slate-400">
+                {{ cargando() ? 'Cargando operaciones...' : 'No se encontraron operaciones registradas.' }}
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <p class="text-[11px] text-slate-400">
+      <i class="fa-solid fa-circle-info"></i>
+      Anular conserva la venta y devuelve el stock al inventario. Solo el administrador puede eliminar definitivamente una venta ya anulada.
+    </p>
+  </div>
+</section>
+
+<!-- MODAL: Corregir venta -->
+@if (modalEdicion()) {
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+    <div class="bg-white w-full max-w-lg rounded-2xl shadow-xl p-6 space-y-4 my-8">
+
+      <div>
+        <h3 class="font-serif text-lg font-bold text-slate-800">Corregir Venta</h3>
+        <p class="text-xs text-slate-500 font-mono">{{ form.numero }}</p>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1">Cliente</label>
+          <input type="text" maxlength="100" [(ngModel)]="form.customer"
+                 class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-pastry-500">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1">Tipo de comprobante</label>
+          <select [(ngModel)]="form.docType"
+                  class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-pastry-500">
+            <option value="Boleta">Boleta de Venta</option>
+            <option value="Factura">Factura Electrónica</option>
+          </select>
+        </div>
+      </div>
+
+      @if (form.docType !== form.tipoOriginal) {
+        <p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          Al cambiar el tipo de comprobante, la venta recibirá un número nuevo de la serie {{ form.docType === 'Factura' ? 'F001' : 'B001' }}.
+        </p>
+      }
+
+      <!-- Cantidades -->
+      <div>
+        <label class="block text-xs font-bold text-slate-600 mb-1">Productos adquiridos</label>
+        <div class="border border-slate-100 rounded-xl divide-y divide-slate-100">
+          @for (l of form.items; track l.id) {
+            <div class="flex items-center justify-between gap-3 p-3 text-xs">
+              <div class="flex-1">
+                <p class="font-bold text-slate-800">{{ l.name }}</p>
+                <p class="text-[10px] text-slate-400 font-mono">S/ {{ l.price.toFixed(2) }} c/u</p>
+              </div>
+              <input type="number" min="1" max="999" step="1" [(ngModel)]="l.qty"
+                     class="w-20 px-2 py-1.5 border rounded-lg text-xs text-center font-mono font-bold outline-none focus:ring-2 focus:ring-pastry-500">
+              <span class="w-20 text-right font-mono font-bold text-slate-800">S/ {{ (l.price * (l.qty || 0)).toFixed(2) }}</span>
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- Vista previa de los nuevos importes -->
+      <div class="bg-pastry-50 rounded-xl border border-pastry-100 p-3 text-xs space-y-1">
+        <div class="flex justify-between text-slate-500"><span>Subtotal (Base)</span><span class="font-mono">S/ {{ subtotalEdicion().toFixed(2) }}</span></div>
+        <div class="flex justify-between text-slate-500"><span>IGV (18%)</span><span class="font-mono">S/ {{ igvEdicion().toFixed(2) }}</span></div>
+        <div class="flex justify-between font-bold text-slate-900 pt-1 border-t border-pastry-100"><span>Nuevo total</span><span class="font-mono text-pastry-700">S/ {{ totalEdicion().toFixed(2) }}</span></div>
+        <div class="flex justify-between text-slate-500"><span>Monto entregado</span><span class="font-mono">S/ {{ form.paid.toFixed(2) }}</span></div>
+        <div class="flex justify-between text-slate-500"><span>Nuevo vuelto</span><span class="font-mono">S/ {{ (vueltoEdicion() > 0 ? vueltoEdicion() : 0).toFixed(2) }}</span></div>
+      </div>
+
+      @if (errorEdicion(); as mensaje) {
+        <p class="text-[11px] text-red-600 font-medium flex items-center gap-1.5">
+          <i class="fa-solid fa-circle-exclamation"></i> {{ mensaje }}
+        </p>
+      }
+
+      <div class="flex justify-end gap-2 pt-1">
+        <button type="button" (click)="cerrarEdicion()" class="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs font-semibold">Cancelar</button>
+        <button type="button" (click)="guardarEdicion()" [disabled]="!!errorEdicion() || guardando()"
+                class="px-4 py-2 bg-pastry-600 text-white rounded-xl text-xs font-semibold hover:bg-pastry-700 disabled:opacity-60 disabled:cursor-not-allowed">
+          {{ guardando() ? 'Guardando...' : 'Guardar cambios' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

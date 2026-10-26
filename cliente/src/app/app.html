@@ -1,0 +1,237 @@
+<div class="min-h-screen flex flex-col flex-grow">
+
+  <!-- PATRÓN 2: Barra de Navegación (solo con sesión iniciada) -->
+  @if (svc.usuario()) {
+    <header class="bg-gradient-to-r from-pastry-900 via-pastry-800 to-pastry-900 text-white shadow-md sticky top-0 z-30">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-16">
+
+          <!-- Izquierda: botón hamburguesa y logo -->
+          <div class="flex items-center gap-3">
+            <!-- PATRÓN 3: Botón Hamburguesa -->
+            <button (click)="alternarMenu()" class="md:hidden p-2 rounded-lg text-pastry-200 hover:text-white hover:bg-pastry-700/50 focus:outline-none">
+              <i class="fa-solid fa-bars text-xl"></i>
+            </button>
+
+            <a routerLink="/dashboard" class="flex items-center gap-2 cursor-pointer">
+              <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-pastry-500 to-pastry-300 flex items-center justify-center text-white shadow-lg">
+                <i class="fa-solid fa-birthday-cake text-xl"></i>
+              </div>
+              <div class="hidden sm:block">
+                <h1 class="font-serif font-bold text-lg leading-tight tracking-wide">Pastelería José Luis</h1>
+                <p class="text-[10px] text-pastry-200 tracking-wider uppercase font-semibold">Control de Ventas</p>
+              </div>
+            </a>
+          </div>
+
+          <!-- Centro: pestañas (escritorio) -->
+          <nav class="hidden md:flex items-center space-x-1 lg:space-x-2">
+            <a routerLink="/dashboard" routerLinkActive="activo" class="nav-btn px-3 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-2">
+              <i class="fa-solid fa-chart-pie text-sm"></i> Dashboard
+            </a>
+            <a routerLink="/punto-venta" routerLinkActive="activo" class="nav-btn px-3 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-2">
+              <i class="fa-solid fa-cash-register text-sm"></i> Punto de Venta
+            </a>
+            <a routerLink="/historial" routerLinkActive="activo" class="nav-btn px-3 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-2">
+              <i class="fa-solid fa-receipt text-sm"></i> Historial Ventas
+            </a>
+            @if (svc.esAdmin()) {
+              <a routerLink="/gestion" routerLinkActive="activo" class="nav-btn px-3 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-2">
+                <i class="fa-solid fa-boxes-stacked text-sm"></i> Gestión Productos / Usuarios
+              </a>
+            }
+          </nav>
+
+          <!-- Derecha: reloj, usuario y salir -->
+          <div class="flex items-center gap-3">
+            <div class="hidden lg:flex flex-col text-right pr-3 border-r border-pastry-700/60">
+              <span class="text-xs font-mono font-bold text-pastry-100">{{ hora() }}</span>
+              <span class="text-[10px] text-pastry-300">{{ fecha() }}</span>
+            </div>
+
+            <div class="flex items-center gap-2 pl-1">
+              <div class="w-8 h-8 rounded-full bg-pastry-700 border border-pastry-500 flex items-center justify-center text-pastry-200 text-xs font-bold">
+                <i class="fa-solid fa-user-circle text-base"></i>
+              </div>
+              <div class="hidden sm:block text-left">
+                <p class="text-xs font-bold text-white leading-tight">{{ svc.usuario()?.name }}</p>
+                <span class="inline-block px-1.5 py-0.5 text-[9px] font-bold rounded bg-pastry-500/40 text-pastry-200 border border-pastry-400/30 uppercase">{{ svc.usuario()?.role }}</span>
+              </div>
+              <button (click)="cerrarSesion()" title="Cerrar Sesión" class="ml-2 p-2 text-pastry-300 hover:text-white hover:bg-pastry-800 rounded-lg transition">
+                <i class="fa-solid fa-right-from-bracket text-base"></i>
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Menú móvil (contenido de la hamburguesa) -->
+      @if (menuAbierto()) {
+        <div class="md:hidden bg-pastry-950 border-t border-pastry-800 px-4 pt-2 pb-4 space-y-2">
+          <a routerLink="/dashboard" (click)="cerrarMenu()" class="w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium text-slate-200 hover:bg-pastry-800 flex items-center gap-3">
+            <i class="fa-solid fa-chart-pie text-pastry-400 w-5"></i> Dashboard
+          </a>
+          <a routerLink="/punto-venta" (click)="cerrarMenu()" class="w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium text-slate-200 hover:bg-pastry-800 flex items-center gap-3">
+            <i class="fa-solid fa-cash-register text-pastry-400 w-5"></i> Punto de Venta (POS)
+          </a>
+          <a routerLink="/historial" (click)="cerrarMenu()" class="w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium text-slate-200 hover:bg-pastry-800 flex items-center gap-3">
+            <i class="fa-solid fa-receipt text-pastry-400 w-5"></i> Historial de Ventas
+          </a>
+          @if (svc.esAdmin()) {
+            <a routerLink="/gestion" (click)="cerrarMenu()" class="w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium text-slate-200 hover:bg-pastry-800 flex items-center gap-3">
+              <i class="fa-solid fa-boxes-stacked text-pastry-400 w-5"></i> Gestión Productos / Usuarios
+            </a>
+          }
+          <div class="pt-2 border-t border-pastry-800 flex items-center justify-between text-xs text-pastry-300 px-2">
+            <span>{{ fecha() }} | {{ hora() }}</span>
+            <button (click)="cerrarSesion()" class="text-red-400 font-semibold flex items-center gap-1">
+              <i class="fa-solid fa-right-from-bracket"></i> Salir
+            </button>
+          </div>
+        </div>
+      }
+    </header>
+  }
+
+  <!-- Contenido de la vista activa -->
+  <main class="flex-grow max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+    <router-outlet />
+  </main>
+
+  <!-- PATRÓN 5: Pie de Página -->
+  @if (svc.usuario()) {
+    <footer class="bg-slate-900 text-slate-400 text-xs mt-auto border-t border-slate-800">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+          <div>
+            <h4 class="text-white font-serif font-bold text-sm mb-2 flex items-center gap-2">
+              <i class="fa-solid fa-cake-candles text-pastry-500"></i> Pastelería José Luis
+            </h4>
+            <p class="text-slate-400 text-xs leading-relaxed">
+              Sistema de Control de Ventas. Calidad y tradición artesanal desde 1998.
+            </p>
+          </div>
+          <div>
+            <h5 class="text-white font-bold mb-2">Enlaces Rápidos</h5>
+            <ul class="space-y-1">
+              <li><a routerLink="/dashboard" class="hover:text-pastry-300 transition">Dashboard de Gestión</a></li>
+              <li><a routerLink="/punto-venta" class="hover:text-pastry-300 transition">Punto de Venta (POS)</a></li>
+              <li><a routerLink="/historial" class="hover:text-pastry-300 transition">Consulta de Ventas</a></li>
+            </ul>
+          </div>
+          <div>
+            <h5 class="text-white font-bold mb-2">Contacto y Atención</h5>
+            <ul class="text-slate-400 text-xs space-y-1.5">
+              <li><span class="text-pastry-400">📍 Dirección:</span> Av. Principal 123, Lima</li>
+              <li><span class="text-pastry-400">📞 Teléfono:</span> +51 999 888 777</li>
+              <li><span class="text-pastry-400">⏰ Horario:</span> Lun a Sáb: 9:00 AM - 8:00 PM</li>
+            </ul>
+          </div>
+
+        </div>
+        <div class="pt-4 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-500">
+          <p>© 2026 Pastelería José Luis S.A.C. Todos los derechos reservados.</p>
+          <p>Sistema Operativo | Versión 3.6.0</p>
+        </div>
+      </div>
+    </footer>
+  }
+
+  <!-- Modal: Comprobante de venta (usado por Punto de Venta e Historial) -->
+  @if (svc.comprobante(); as v) {
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 overflow-y-auto">
+      <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden border border-slate-100 my-8">
+
+        <div class="bg-slate-800 p-4 text-white text-center flex justify-between items-center">
+          <span class="text-xs font-bold uppercase tracking-wider">Comprobante de Venta</span>
+          <button (click)="svc.cerrarComprobante()" class="text-slate-400 hover:text-white">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+
+        <!-- Área imprimible -->
+        <div id="printableReceipt" class="p-6 bg-amber-50/30 text-slate-800 printable-ticket text-xs space-y-4">
+          @if (v.estado === 0) {
+            <p class="text-center font-bold text-red-600 border-2 border-red-500 rounded-lg py-1 tracking-widest">*** COMPROBANTE ANULADO ***</p>
+          }
+          <div class="text-center space-y-1">
+            <h2 class="font-bold text-base uppercase font-serif tracking-wider">PASTELERÍA JOSÉ LUIS</h2>
+            <p class="text-[11px] text-slate-600">RUC: 20601234567</p>
+            <p class="text-[10px] text-slate-500">Av. Los Postres 456, Lima - Perú</p>
+            <p class="text-[10px] text-slate-500">Tel: (01) 456-7890</p>
+            <div class="border-b border-dashed border-slate-300 my-2"></div>
+            <p class="font-bold uppercase text-xs">{{ v.docType.toUpperCase() }} DE VENTA ELECTRÓNICA</p>
+            <p class="font-bold text-sm text-pastry-800">{{ v.id }}</p>
+          </div>
+
+          <div class="space-y-1 text-[11px]">
+            <div class="flex justify-between"><span>Fecha:</span> <span>{{ v.date }}</span></div>
+            <div class="flex justify-between"><span>Cliente:</span> <span>{{ v.customer }}</span></div>
+            <div class="flex justify-between"><span>Atendido por:</span> <span>{{ v.user }}</span></div>
+          </div>
+
+          <div class="border-b border-dashed border-slate-300"></div>
+
+          <table class="w-full text-left text-[11px]">
+            <thead>
+              <tr class="border-b border-slate-200">
+                <th class="pb-1">Cant/Desc</th>
+                <th class="pb-1 text-right">P.U.</th>
+                <th class="pb-1 text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              @for (item of v.items; track item.id) {
+                <tr>
+                  <td class="py-1">
+                    <div class="font-bold">{{ item.name }}</div>
+                    <div class="text-[10px] text-slate-500">{{ item.qty }} x S/ {{ item.price.toFixed(2) }}</div>
+                  </td>
+                  <td class="py-1 text-right font-mono">S/ {{ item.price.toFixed(2) }}</td>
+                  <td class="py-1 text-right font-mono font-bold">S/ {{ (item.price * item.qty).toFixed(2) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+
+          <div class="border-b border-dashed border-slate-300"></div>
+
+          <div class="space-y-1 text-[11px]">
+            <div class="flex justify-between"><span>Op. Gravada:</span> <span>S/ {{ v.subtotal.toFixed(2) }}</span></div>
+            <div class="flex justify-between"><span>IGV (18%):</span> <span>S/ {{ v.igv.toFixed(2) }}</span></div>
+            <div class="flex justify-between font-bold text-sm pt-1"><span>TOTAL:</span> <span>S/ {{ v.total.toFixed(2) }}</span></div>
+            <div class="flex justify-between text-slate-600 pt-1"><span>Efectivo Entregado:</span> <span>S/ {{ v.paid.toFixed(2) }}</span></div>
+            <div class="flex justify-between text-slate-600"><span>Vuelto:</span> <span>S/ {{ v.change.toFixed(2) }}</span></div>
+          </div>
+
+          <div class="text-center pt-3 border-t border-dashed border-slate-300 space-y-1">
+            <p class="font-semibold text-[10px]">¡Gracias por endulzar tu día con nosotros!</p>
+            <p class="text-[9px] text-slate-400">Pastelería José Luis - 2026</p>
+          </div>
+        </div>
+
+        <div class="p-4 bg-slate-50 border-t border-slate-100 flex gap-2">
+          <button (click)="imprimir()" class="flex-1 py-2.5 bg-slate-800 text-white font-semibold rounded-xl text-xs hover:bg-slate-900 transition flex items-center justify-center gap-1.5">
+            <i class="fa-solid fa-print"></i> Imprimir
+          </button>
+          <button (click)="svc.cerrarComprobante()" class="flex-1 py-2.5 bg-pastry-600 text-white font-semibold rounded-xl text-xs hover:bg-pastry-700 transition flex items-center justify-center gap-1.5">
+            <i class="fa-solid fa-check"></i> Finalizar
+          </button>
+        </div>
+
+      </div>
+    </div>
+  }
+
+  <!-- Notificaciones (toast) -->
+  <div class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none">
+    @for (t of svc.toasts(); track t.id) {
+      <div class="toast px-4 py-3 rounded-xl shadow-xl text-xs font-semibold flex items-center gap-2 pointer-events-auto" [class]="claseToast(t.type)">
+        <i class="fa-solid text-sm" [class]="iconoToast(t.type)"></i>
+        <span>{{ t.message }}</span>
+      </div>
+    }
+  </div>
+
+</div>

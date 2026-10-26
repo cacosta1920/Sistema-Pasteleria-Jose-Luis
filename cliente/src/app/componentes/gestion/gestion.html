@@ -1,0 +1,265 @@
+<section class="space-y-8">
+
+  <!-- Encabezado -->
+  <div class="bg-slate-900 text-white p-6 rounded-2xl shadow-md flex items-center justify-between">
+    <div>
+      <span class="px-2.5 py-1 bg-pastry-600 text-white rounded text-[10px] font-bold uppercase tracking-wider">Módulo Exclusivo Admin</span>
+      <h2 class="font-serif text-2xl font-bold mt-1">Mantenimiento del Sistema</h2>
+      <p class="text-xs text-slate-400">Administración de productos, precios, usuarios del sistema y accesos.</p>
+    </div>
+    <i class="fa-solid fa-sliders text-4xl text-pastry-400 opacity-60"></i>
+  </div>
+
+  <!-- Catálogo de productos (CRUD) -->
+  <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+        <i class="fa-solid fa-cake-candles text-pastry-600"></i> Catálogo de Productos
+      </h3>
+      <div class="flex items-center gap-4">
+        <label class="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer">
+          <input type="checkbox" [checked]="verProductosInactivos()"
+                 (change)="verProductosInactivos.set($any($event.target).checked)">
+          Mostrar inactivos ({{ productosInactivos() }})
+        </label>
+        <button (click)="abrirProducto()" class="px-4 py-2 bg-pastry-600 hover:bg-pastry-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-sm">
+          <i class="fa-solid fa-plus"></i> Nuevo Producto
+        </button>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs">
+        <thead class="bg-slate-50 text-slate-500 uppercase tracking-wider font-bold">
+          <tr>
+            <th class="p-3 rounded-l-xl">Imagen</th>
+            <th class="p-3">Nombre</th>
+            <th class="p-3">Categoría</th>
+            <th class="p-3">Precio Unitario</th>
+            <th class="p-3">Stock</th>
+            <th class="p-3">Estado</th>
+            <th class="p-3 rounded-r-xl text-center">Acciones</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          @for (p of productosVisibles(); track p.id) {
+            <tr class="hover:bg-slate-50" [class.opacity-50]="p.estado === 0">
+              <td class="p-3">
+                <img [src]="p.image" [alt]="p.name" (error)="imagenError($event)" class="w-10 h-10 object-cover rounded-lg border">
+              </td>
+              <td class="p-3 font-bold text-slate-800">{{ p.name }}</td>
+              <td class="p-3"><span class="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-semibold">{{ p.category }}</span></td>
+              <td class="p-3 font-mono font-bold">S/ {{ p.price.toFixed(2) }}</td>
+              <td class="p-3 font-bold" [class]="p.stock <= 5 ? 'text-red-500' : 'text-slate-700'">{{ p.stock }} u.</td>
+              <td class="p-3">
+                @if (p.estado === 0) {
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600">Inactivo</span>
+                } @else {
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">Activo</span>
+                }
+              </td>
+              <td class="p-3 text-center space-x-1 whitespace-nowrap">
+                <button (click)="abrirProducto(p)" title="Editar" class="p-1.5 text-blue-600 hover:bg-blue-50 rounded"><i class="fa-solid fa-pen-to-square"></i></button>
+                @if (p.estado === 0) {
+                  <button (click)="cambiarEstadoProducto(p, 1)" title="Reactivar" class="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded"><i class="fa-solid fa-rotate-left"></i></button>
+                  <button (click)="eliminarProducto(p)" title="Eliminar definitivamente" class="p-1.5 text-red-600 hover:bg-red-50 rounded"><i class="fa-solid fa-trash-can"></i></button>
+                } @else {
+                  <button (click)="cambiarEstadoProducto(p, 0)" title="Desactivar (eliminación lógica)" class="p-1.5 text-amber-600 hover:bg-amber-50 rounded"><i class="fa-solid fa-ban"></i></button>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr><td colspan="7" class="text-center py-8 text-slate-400">No hay productos para mostrar.</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    <p class="text-[11px] text-slate-400">
+      <i class="fa-solid fa-circle-info"></i>
+      Desactivar conserva el producto pero deja de venderse. Para borrarlo definitivamente, primero desactívalo y activa "Mostrar inactivos".
+    </p>
+  </div>
+
+  <!-- Usuarios y encargados (CRUD) -->
+  <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+        <i class="fa-solid fa-users-gear text-pastry-600"></i> Usuarios y Encargados
+      </h3>
+      <div class="flex items-center gap-4">
+        <label class="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer">
+          <input type="checkbox" [checked]="verUsuariosInactivos()"
+                 (change)="verUsuariosInactivos.set($any($event.target).checked)">
+          Mostrar inactivos ({{ usuariosInactivos() }})
+        </label>
+        <button (click)="abrirUsuario()" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-sm">
+          <i class="fa-solid fa-user-plus"></i> Nuevo Usuario
+        </button>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs">
+        <thead class="bg-slate-50 text-slate-500 uppercase tracking-wider font-bold">
+          <tr>
+            <th class="p-3 rounded-l-xl">Usuario</th>
+            <th class="p-3">Nombre Completo</th>
+            <th class="p-3">Rol</th>
+            <th class="p-3">Estado</th>
+            <th class="p-3 rounded-r-xl text-center">Acciones</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          @for (u of usuariosVisibles(); track u.id) {
+            <tr class="hover:bg-slate-50" [class.opacity-50]="u.estado === 0">
+              <td class="p-3 font-mono font-bold text-slate-800">{{ u.username }}</td>
+              <td class="p-3 font-semibold text-slate-700">{{ u.name }}</td>
+              <td class="p-3"><span class="px-2 py-0.5 bg-pastry-100 text-pastry-800 rounded text-[10px] font-bold">{{ u.role }}</span></td>
+              <td class="p-3">
+                @if (u.estado === 0) {
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600">Inactivo</span>
+                } @else {
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">Activo</span>
+                }
+              </td>
+              <td class="p-3 text-center space-x-1 whitespace-nowrap">
+                <button (click)="abrirUsuario(u)" title="Editar" class="p-1.5 text-blue-600 hover:bg-blue-50 rounded"><i class="fa-solid fa-pen-to-square"></i></button>
+                @if (esMiCuenta(u.id)) {
+                  <span class="text-[10px] text-slate-400 font-semibold">(tu cuenta)</span>
+                } @else if (u.estado === 0) {
+                  <button (click)="cambiarEstadoUsuario(u, 1)" title="Reactivar" class="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded"><i class="fa-solid fa-rotate-left"></i></button>
+                  <button (click)="eliminarUsuario(u)" title="Eliminar definitivamente" class="p-1.5 text-red-600 hover:bg-red-50 rounded"><i class="fa-solid fa-trash-can"></i></button>
+                } @else {
+                  <button (click)="cambiarEstadoUsuario(u, 0)" title="Desactivar (eliminación lógica)" class="p-1.5 text-amber-600 hover:bg-amber-50 rounded"><i class="fa-solid fa-ban"></i></button>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr><td colspan="5" class="text-center py-8 text-slate-400">No hay usuarios para mostrar.</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</section>
+
+<!-- MODAL: Producto (agregar / editar) -->
+@if (modalProducto()) {
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-xl overflow-hidden p-6 space-y-4">
+      <h3 class="font-serif text-lg font-bold text-slate-800">{{ prod.id ? 'Editar Producto' : 'Nuevo Producto' }}</h3>
+
+      <form #fp="ngForm" (ngSubmit)="guardarProducto()" class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1">Nombre del Producto</label>
+          <input type="text" name="nombre" [(ngModel)]="prod.name" maxlength="100"
+                 class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-pastry-500">
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">Categoría</label>
+            <select name="categoria" [(ngModel)]="prod.category"
+                    class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-pastry-500">
+              <option value="Tortas">Tortas &amp; Pies</option>
+              <option value="Individuales">Individuales</option>
+              <option value="Salados">Salados</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">Precio (S/)</label>
+            <input type="number" name="precio" step="0.50" min="0.10" max="9999.99" [(ngModel)]="prod.price"
+                   class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-pastry-500">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1">Stock Disponible</label>
+          <input type="number" name="stock" step="1" min="0" max="9999" [(ngModel)]="prod.stock"
+                 class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-pastry-500">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1">URL de Imagen</label>
+          <input type="url" name="imagen" [(ngModel)]="prod.image" maxlength="255" placeholder="https://..."
+                 class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-pastry-500">
+        </div>
+
+        @if (fp.dirty && errorProducto(); as mensaje) {
+          <p class="text-[11px] text-red-600 font-medium flex items-center gap-1.5">
+            <i class="fa-solid fa-circle-exclamation"></i> {{ mensaje }}
+          </p>
+        }
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" (click)="cerrarProducto()" class="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs font-semibold">Cancelar</button>
+          <button type="submit" [disabled]="!!errorProducto() || guardando()"
+                  class="px-4 py-2 bg-pastry-600 text-white rounded-xl text-xs font-semibold hover:bg-pastry-700 disabled:opacity-60 disabled:cursor-not-allowed">
+            {{ guardando() ? 'Guardando...' : 'Guardar' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+<!-- MODAL: Usuario (agregar / editar) -->
+@if (modalUsuario()) {
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-xl overflow-hidden p-6 space-y-4 my-8">
+      <h3 class="font-serif text-lg font-bold text-slate-800">{{ usr.id ? 'Editar Usuario' : 'Nuevo Usuario' }}</h3>
+
+      <form #fu="ngForm" (ngSubmit)="guardarUsuario()" class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1">Nombre Usuario (Username)</label>
+          <input type="text" name="username" [(ngModel)]="usr.username" maxlength="30" autocomplete="off"
+                 class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-pastry-500">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1">Nombre Completo</label>
+          <input type="text" name="nombre" [(ngModel)]="usr.name" maxlength="80"
+                 class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-pastry-500">
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">Contraseña</label>
+            <input type="password" name="password" [(ngModel)]="usr.password" maxlength="64" autocomplete="new-password"
+                   [placeholder]="usr.id ? 'Vacío = conservar' : ''"
+                   class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-pastry-500">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">Rol</label>
+            <select name="rol" [(ngModel)]="usr.role" [disabled]="esMiCuenta(usr.id)"
+                    class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-pastry-500 disabled:bg-slate-100">
+              <option value="Encargado de Ventas">Encargado de Ventas</option>
+              <option value="Administrador">Administrador</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Requisitos de la contraseña, en vivo -->
+        @if (pideContrasena()) {
+          <ul class="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] bg-slate-50 rounded-xl p-3 border border-slate-100">
+            @for (r of reglasPassword(); track r.texto) {
+              <li [class]="r.cumple ? 'text-emerald-600 font-medium' : 'text-slate-400'">
+                <i class="fa-solid mr-1" [class]="r.cumple ? 'fa-circle-check' : 'fa-circle'"></i>{{ r.texto }}
+              </li>
+            }
+          </ul>
+        }
+
+        @if (fu.dirty && errorUsuario(); as mensaje) {
+          <p class="text-[11px] text-red-600 font-medium flex items-center gap-1.5">
+            <i class="fa-solid fa-circle-exclamation"></i> {{ mensaje }}
+          </p>
+        }
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" (click)="cerrarUsuario()" class="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs font-semibold">Cancelar</button>
+          <button type="submit" [disabled]="!!errorUsuario() || guardando()"
+                  class="px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-semibold hover:bg-slate-900 disabled:opacity-60 disabled:cursor-not-allowed">
+            {{ guardando() ? 'Guardando...' : 'Guardar' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}

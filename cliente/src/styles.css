@@ -1,0 +1,61 @@
+/* You can add global styles to this file, and also import other style files */
+
+@import "tailwindcss";
+
+/* Paleta y fuentes de la Pastelería José Luis (antes en tailwind.config) */
+@theme {
+  --color-pastry-50: #fff5f7;
+  --color-pastry-100: #ffeef2;
+  --color-pastry-200: #ffdbe3;
+  --color-pastry-300: #ffb8c8;
+  --color-pastry-400: #f885a0;
+  --color-pastry-500: #ee5379;
+  --color-pastry-600: #db3158;
+  --color-pastry-700: #b82043;
+  --color-pastry-800: #9b1e3d;
+  --color-pastry-900: #630f23;
+  --color-pastry-950: #3f0a17;
+  --color-pastry-cream: #fdfbf7;
+  --color-pastry-burgundy: #58111e;
+  --color-pastry-gold: #d4af37;
+
+  --font-sans: 'Plus Jakarta Sans', sans-serif;
+  --font-serif: 'Playfair Display', serif;
+}
+
+/* Scrollbar personalizado */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+::-webkit-scrollbar-thumb {
+  background: #f885a0;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #db3158;
+}
+
+/* Ticket de venta */
+.printable-ticket {
+  font-family: 'Courier New', Courier, monospace;
+}
+
+/* Impresión: solo se imprime el comprobante */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #printableReceipt, #printableReceipt * {
+    visibility: visible;
+  }
+  #printableReceipt {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+}
