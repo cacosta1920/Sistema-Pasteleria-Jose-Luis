@@ -239,7 +239,7 @@ export class Pasteleria {
 
   registrarVenta(venta: NuevaVenta): Observable<Venta> {
     return this.peticion(this.http.post<Venta>(`${this.apiUrl}/ventas`, venta, this.opts()));
-  }
+  } 
 
   // Actualizar: corrige cliente, tipo de comprobante y cantidades
   actualizarVenta(codigo: number, datos: CorreccionVenta): Observable<Venta> {

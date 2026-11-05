@@ -14,7 +14,7 @@ function resumir(valores: number[]) {
     min: Math.min(...valores),
     prom: valores.reduce((a, b) => a + b, 0) / valores.length
   };
-}
+} 
 
 @Component({
   selector: 'app-dashboard',
@@ -66,7 +66,7 @@ export class Dashboard {
         titulo: '2. Monto Total Mes', icono: 'fa-sack-dollar', color: 'bg-emerald-50 text-emerald-600',
         actual: sol(monto.actual), max: sol(monto.max), min: sol(monto.min), prom: sol(monto.prom)
       },
-      {
+      { 
         titulo: '3. Prom. / Operación', icono: 'fa-calculator', color: 'bg-amber-50 text-amber-600',
         actual: sol(promOp.actual), max: sol(promOp.max), min: sol(promOp.min), prom: sol(promOp.prom)
       },
@@ -75,7 +75,7 @@ export class Dashboard {
         actual: pct(crec.actual), max: pct(crec.max), min: pct(crec.min), prom: pct(crec.prom)
       }
     ];
-  });
+  }); 
 
   constructor() {
     // Sin sesión no se puede ver el dashboard

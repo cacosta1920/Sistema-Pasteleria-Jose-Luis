@@ -435,7 +435,7 @@ app.get('/api/ventas', autenticar, (req, res) => {
         }
         condiciones.push('DATE(v.fecha) = ?');
         params.push(req.query.fecha);
-    }
+    } 
     if (req.query.texto) {
         if (typeof req.query.texto !== 'string' || req.query.texto.length > 100) {
             return res.status(400).json({ message: 'El texto de búsqueda no puede superar los 100 caracteres' });

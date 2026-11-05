@@ -43,7 +43,7 @@ export class Gestion {
     this.usuarios().filter(u => this.verUsuariosInactivos() || u.estado !== 0)
   );
   productosInactivos = computed(() => this.productos().filter(p => p.estado === 0).length);
-  usuariosInactivos = computed(() => this.usuarios().filter(u => u.estado === 0).length);
+  usuariosInactivos = computed(() => this.usuarios().filter(u => u.estado === 0).length); 
 
   modalProducto = signal(false);
   modalUsuario = signal(false);

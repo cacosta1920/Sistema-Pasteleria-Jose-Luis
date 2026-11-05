@@ -50,7 +50,7 @@ export class HistorialVentas {
     );
   });
 
-  anuladas = computed(() => this.ventas().filter(v => v.estado === 0).length);
+  anuladas = computed(() => this.ventas().filter(v => v.estado === 0).length); 
 
   /* Modal de corrección */
   modalEdicion = signal(false);
