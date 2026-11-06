@@ -38,9 +38,16 @@
           <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
             <i class="fa-solid fa-lock"></i>
           </span>
-          <input type="password" name="password" [(ngModel)]="password" maxlength="64" autocomplete="current-password"
-                 class="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-pastry-500 focus:border-transparent text-sm bg-slate-50 transition"
+          <input [type]="verPassword() ? 'text' : 'password'" name="password" [(ngModel)]="password" maxlength="64" autocomplete="current-password"
+                 class="w-full pl-10 pr-12 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-pastry-500 focus:border-transparent text-sm bg-slate-50 transition"
                  placeholder="••••••••">
+          <!-- Ojo: muestra u oculta la contraseña escrita -->
+          <button type="button" (click)="alternarPassword()"
+                  [attr.aria-label]="verPassword() ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+                  [title]="verPassword() ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+                  class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400 hover:text-pastry-600 focus:outline-none focus:text-pastry-600 transition">
+            <i class="fa-solid" [class.fa-eye]="!verPassword()" [class.fa-eye-slash]="verPassword()"></i>
+          </button>
         </div>
       </div>
 

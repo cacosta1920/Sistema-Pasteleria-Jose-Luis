@@ -58,4 +58,23 @@
     top: 0;
     width: 100%;
   }
+
+  /* Reporte del historial (Exportar PDF): solo se imprime cuando body tiene la clase
+     "imprimiendo-historial"; así no interfiere con la impresión del ticket */
+  body.imprimiendo-historial #printableHistorial,
+  body.imprimiendo-historial #printableHistorial * {
+    visibility: visible;
+  }
+  body.imprimiendo-historial #printableHistorial {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+}
+
+/* Reporte del historial: oculto en pantalla */
+.reporte-historial {
+  display: none;
 }

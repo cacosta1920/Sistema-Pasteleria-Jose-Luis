@@ -17,6 +17,11 @@ export class Login {
   password = '';
   error = signal('');
   cargando = signal(false);
+  verPassword = signal(false);   // false = contraseña oculta, true = visible
+
+  alternarPassword(): void {
+    this.verPassword.update(v => !v);
+  }
 
   constructor() {
     // Si ya hay sesión iniciada, no se muestra el login

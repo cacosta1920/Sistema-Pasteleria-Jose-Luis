@@ -48,6 +48,11 @@ export class Gestion {
   modalProducto = signal(false);
   modalUsuario = signal(false);
   guardando = signal(false);
+  verPassword = signal(false);   // false = contraseña oculta, true = visible
+
+  alternarPassword(): void {
+    this.verPassword.update(v => !v);
+  }
 
   prod: FormProducto = this.productoVacio();
   usr: FormUsuario = this.usuarioVacio();
@@ -116,14 +121,16 @@ export class Gestion {
     if (nombre.length < 2 || nombre.length > 100) return 'El nombre debe tener entre 2 y 100 caracteres';
 
     const precio = Number(p.price);
-    if (p.price === null || !Number.isFinite(precio) || precio < 0.1 || precio > 9999.99) {
-      return 'El precio debe estar entre S/ 0.10 y S/ 9999.99';
+    if (p.price === null || !Number.isFinite(precio) || precio < 5 || precio > 75) {
+      return 'El precio debe estar entre S/ 5.00 y S/ 75.00';
     }
     if (Math.abs(precio * 100 - Math.round(precio * 100)) > 1e-6) return 'El precio admite máximo 2 decimales';
 
+    // Al crear el stock va de 1 a 85; al editar se permite 0 (producto agotado)
+    const stockMin = p.id ? 0 : 1;
     const stock = Number(p.stock);
-    if (p.stock === null || !Number.isInteger(stock) || stock < 0 || stock > 9999) {
-      return 'El stock debe ser un número entero entre 0 y 9999';
+    if (p.stock === null || !Number.isInteger(stock) || stock < stockMin || stock > 85) {
+      return `El stock debe ser un número entero entre ${stockMin} y 85`;
     }
 
     const imagen = (p.image ?? '').trim();
@@ -199,6 +206,7 @@ export class Gestion {
     this.usr = u
       ? { id: u.id, username: u.username, name: u.name, password: '', role: u.role }
       : this.usuarioVacio();
+    this.verPassword.set(false);   // cada vez que se abre, la contraseña inicia oculta
     this.modalUsuario.set(true);
   }
 

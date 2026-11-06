@@ -51,14 +51,18 @@ function errorPassword(p) {
     return faltan.length ? 'La contraseña debe tener ' + faltan.join(', ') : null;
 }
 
-function validarProducto(b) {
+// esNuevo = true al crear (stock de 1 a 85); al editar se permite 0 (producto agotado)
+function validarProducto(b, esNuevo) {
     const name = texto(b.name);
     if (name.length < 2 || name.length > 100) return { error: 'El nombre debe tener entre 2 y 100 caracteres' };
     if (!CATEGORIAS.includes(b.category)) return { error: 'La categoría no es válida' };
-    if (!esNumero(b.price, 0.1, 9999.99) || !dosDecimales(b.price)) {
-        return { error: 'El precio debe estar entre S/ 0.10 y S/ 9999.99 (máximo 2 decimales)' };
+    if (!esNumero(b.price, 5, 75) || !dosDecimales(b.price)) {
+        return { error: 'El precio debe estar entre S/ 5.00 y S/ 75.00 (máximo 2 decimales)' };
     }
-    if (!esEntero(b.stock, 0, 9999)) return { error: 'El stock debe ser un número entero entre 0 y 9999' };
+    const stockMin = esNuevo ? 1 : 0;
+    if (!esEntero(b.stock, stockMin, 85)) {
+        return { error: `El stock debe ser un número entero entre ${stockMin} y 85` };
+    }
     const image = texto(b.image);
     if (image.length > 255 || !/^https?:\/\/\S+$/i.test(image)) {
         return { error: 'La imagen debe ser una URL http(s) de hasta 255 caracteres' };
@@ -232,7 +236,7 @@ app.get('/api/productos', autenticar, (req, res) => {
 });
 
 app.post('/api/productos', autenticar, soloAdmin, (req, res) => {
-    const { error, datos } = validarProducto(req.body || {});
+    const { error, datos } = validarProducto(req.body || {}, true);
     if (error) return res.status(400).json({ message: error });
 
     const query = `
@@ -248,18 +252,19 @@ app.post('/api/productos', autenticar, soloAdmin, (req, res) => {
 app.put('/api/productos/:id', autenticar, soloAdmin, (req, res) => {
     const id = idValido(req, res);
     if (id === null) return;
-    const { error, datos } = validarProducto(req.body || {});
+    const { error, datos } = validarProducto(req.body || {}, false);
     if (error) return res.status(400).json({ message: error });
 
+    // Al editar solo se modifican categoría, stock e imagen (el nombre y el precio no se cambian)
     const query = `
         UPDATE Producto
-        SET nombre = ?, categoria = ?, precio = ?, stock = ?, imagen = ?
+        SET categoria = ?, stock = ?, imagen = ?
         WHERE codigo_producto = ?;
     `;
-    db.query(query, [datos.name, datos.category, datos.price, datos.stock, datos.image, id], (err, result) => {
+    db.query(query, [datos.category, datos.stock, datos.image, id], (err, result) => {
         if (err) return responderError(res, err);
         if (result.affectedRows === 0) return res.status(404).json({ message: 'Producto no encontrado' });
-        res.json({ id, ...datos });
+        res.json({ id, category: datos.category, stock: datos.stock, image: datos.image });
     });
 });
 
@@ -435,7 +440,7 @@ app.get('/api/ventas', autenticar, (req, res) => {
         }
         condiciones.push('DATE(v.fecha) = ?');
         params.push(req.query.fecha);
-    } 
+    }
     if (req.query.texto) {
         if (typeof req.query.texto !== 'string' || req.query.texto.length > 100) {
             return res.status(400).json({ message: 'El texto de búsqueda no puede superar los 100 caracteres' });

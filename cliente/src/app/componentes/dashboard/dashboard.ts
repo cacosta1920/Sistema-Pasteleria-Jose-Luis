@@ -14,7 +14,7 @@ function resumir(valores: number[]) {
     min: Math.min(...valores),
     prom: valores.reduce((a, b) => a + b, 0) / valores.length
   };
-} 
+}
 
 @Component({
   selector: 'app-dashboard',
@@ -75,7 +75,7 @@ export class Dashboard {
         actual: pct(crec.actual), max: pct(crec.max), min: pct(crec.min), prom: pct(crec.prom)
       }
     ];
-  }); 
+  });
 
   constructor() {
     // Sin sesión no se puede ver el dashboard

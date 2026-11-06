@@ -31,6 +31,7 @@ export class HistorialVentas {
   private router = inject(Router);
 
   esAdmin = this.svc.esAdmin;
+  usuarioActual = this.svc.usuario;
 
   ventas = signal<Venta[]>([]);
   cargando = signal(true);
@@ -50,7 +51,7 @@ export class HistorialVentas {
     );
   });
 
-  anuladas = computed(() => this.ventas().filter(v => v.estado === 0).length); 
+  anuladas = computed(() => this.ventas().filter(v => v.estado === 0).length);
 
   /* Modal de corrección */
   modalEdicion = signal(false);
@@ -86,6 +87,53 @@ export class HistorialVentas {
 
   verTicket(venta: Venta): void {
     this.svc.verComprobante(venta);
+  }
+
+  /* =====================================================
+     EXPORTAR A PDF
+     Se imprime el reporte (#printableHistorial) con el mismo mecanismo del ticket;
+     en el diálogo de impresión se elige "Guardar como PDF".
+     ===================================================== */
+  generado = signal('');
+
+  // Las anuladas se listan en el reporte, pero no suman al total
+  private vigentesFiltradas = computed(() => this.ventasFiltradas().filter(v => v.estado !== 0));
+  cantidadVigentes = computed(() => this.vigentesFiltradas().length);
+  totalVigentes = computed(
+    () => Math.round(this.vigentesFiltradas().reduce((acc, v) => acc + v.total, 0) * 100) / 100
+  );
+
+  filtrosAplicados(): string {
+    return [
+      this.fecha() ? `Fecha: ${this.fecha()}` : '',
+      this.texto() ? `Búsqueda: "${this.texto()}"` : '',
+      this.verAnuladas() ? 'Incluye anuladas' : ''
+    ].filter(Boolean).join('  |  ');
+  }
+
+  exportarPdf(): void {
+    if (this.ventasFiltradas().length === 0) {
+      this.svc.mostrarToast('No hay ventas para exportar', 'warning');
+      return;
+    }
+
+    const ahora = new Date();
+    this.generado.set(ahora.toLocaleString('es-PE'));
+
+    // El navegador propone el título de la página como nombre del archivo PDF
+    const tituloOriginal = document.title;
+    const dd = String(ahora.getDate()).padStart(2, '0');
+    const mm = String(ahora.getMonth() + 1).padStart(2, '0');
+    document.title = `Historial-Ventas-${ahora.getFullYear()}-${mm}-${dd}`;
+    document.body.classList.add('imprimiendo-historial');
+
+    window.addEventListener('afterprint', () => {
+      document.body.classList.remove('imprimiendo-historial');
+      document.title = tituloOriginal;
+    }, { once: true });
+
+    // Pequeña espera para que Angular pinte la fecha de generación antes de abrir la impresión
+    setTimeout(() => window.print(), 100);
   }
 
   /* =====================================================

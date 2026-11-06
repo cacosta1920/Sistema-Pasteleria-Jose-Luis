@@ -153,8 +153,8 @@
       <form #fp="ngForm" (ngSubmit)="guardarProducto()" class="space-y-3">
         <div>
           <label class="block text-xs font-bold text-slate-600 mb-1">Nombre del Producto</label>
-          <input type="text" name="nombre" [(ngModel)]="prod.name" maxlength="100"
-                 class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-pastry-500">
+          <input type="text" name="nombre" [(ngModel)]="prod.name" maxlength="100" [disabled]="!!prod.id"
+                 class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-pastry-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed">
         </div>
         <div class="grid grid-cols-2 gap-2">
           <div>
@@ -168,13 +168,13 @@
           </div>
           <div>
             <label class="block text-xs font-bold text-slate-600 mb-1">Precio (S/)</label>
-            <input type="number" name="precio" step="0.50" min="0.10" max="9999.99" [(ngModel)]="prod.price"
-                   class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-pastry-500">
+            <input type="number" name="precio" step="0.50" min="5" max="75" [(ngModel)]="prod.price" [disabled]="!!prod.id"
+                   class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-pastry-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed">
           </div>
         </div>
         <div>
           <label class="block text-xs font-bold text-slate-600 mb-1">Stock Disponible</label>
-          <input type="number" name="stock" step="1" min="0" max="9999" [(ngModel)]="prod.stock"
+          <input type="number" name="stock" step="1" [attr.min]="prod.id ? 0 : 1" max="85" [(ngModel)]="prod.stock"
                  class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-pastry-500">
         </div>
         <div>
@@ -221,9 +221,18 @@
         <div class="grid grid-cols-2 gap-2">
           <div>
             <label class="block text-xs font-bold text-slate-600 mb-1">Contraseña</label>
-            <input type="password" name="password" [(ngModel)]="usr.password" maxlength="64" autocomplete="new-password"
-                   [placeholder]="usr.id ? 'Vacío = conservar' : ''"
-                   class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-pastry-500">
+            <div class="relative">
+              <input [type]="verPassword() ? 'text' : 'password'" name="password" [(ngModel)]="usr.password" maxlength="64" autocomplete="new-password"
+                     [placeholder]="usr.id ? 'Vacío = conservar' : ''"
+                     class="w-full pl-3 pr-9 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-pastry-500">
+              <!-- Ojo: muestra u oculta la contraseña escrita -->
+              <button type="button" (click)="alternarPassword()"
+                      [attr.aria-label]="verPassword() ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+                      [title]="verPassword() ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+                      class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-pastry-600 focus:outline-none focus:text-pastry-600 transition">
+                <i class="fa-solid" [class.fa-eye]="!verPassword()" [class.fa-eye-slash]="verPassword()"></i>
+              </button>
+            </div>
           </div>
           <div>
             <label class="block text-xs font-bold text-slate-600 mb-1">Rol</label>
