@@ -1,7 +1,16 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { Pasteleria, Producto, Usuario, evaluarPassword } from '../../services/pasteleria';
+import { Pasteleria, Producto, Usuario, Venta, evaluarPassword } from '../../services/pasteleria';
+
+type TipoRegistro = 'Venta' | 'Producto' | 'Usuario';
+
+interface RegistroEliminado {
+  tipo: TipoRegistro;
+  registro: string;      // código / nombre / usuario
+  descripcion: string;
+  detalle: string;       // fecha, categoría o rol
+}
 
 interface FormProducto {
   id?: number;
@@ -43,7 +52,73 @@ export class Gestion {
     this.usuarios().filter(u => this.verUsuariosInactivos() || u.estado !== 0)
   );
   productosInactivos = computed(() => this.productos().filter(p => p.estado === 0).length);
-  usuariosInactivos = computed(() => this.usuarios().filter(u => u.estado === 0).length); 
+  usuariosInactivos = computed(() => this.usuarios().filter(u => u.estado === 0).length);
+
+  /* ===== Reporte de registros eliminados (eliminación lógica vigente) ===== */
+  ventas = signal<Venta[]>([]);
+  filtroTipo = signal<'Todos' | TipoRegistro>('Todos');
+  generado = signal('');
+  usuarioActual = this.svc.usuario;
+
+  registrosEliminados = computed<RegistroEliminado[]>(() => {
+    const ventas: RegistroEliminado[] = this.ventas()
+      .filter(v => v.estado === 0)
+      .map(v => ({
+        tipo: 'Venta' as const,
+        registro: v.id,
+        descripcion: `${v.docType} a ${v.customer || 'Cliente general'} · S/ ${v.total.toFixed(2)}`,
+        detalle: v.date
+      }));
+    const prods: RegistroEliminado[] = this.productos()
+      .filter(p => p.estado === 0)
+      .map(p => ({
+        tipo: 'Producto' as const,
+        registro: p.name,
+        descripcion: `S/ ${p.price.toFixed(2)} · stock ${p.stock}`,
+        detalle: p.category
+      }));
+    const usrs: RegistroEliminado[] = this.usuarios()
+      .filter(u => u.estado === 0)
+      .map(u => ({
+        tipo: 'Usuario' as const,
+        registro: u.username,
+        descripcion: u.name,
+        detalle: u.role
+      }));
+    return [...ventas, ...prods, ...usrs];
+  });
+
+  registrosFiltrados = computed(() => {
+    const t = this.filtroTipo();
+    return this.registrosEliminados().filter(r => t === 'Todos' || r.tipo === t);
+  });
+
+  contador(tipo: TipoRegistro): number {
+    return this.registrosEliminados().filter(r => r.tipo === tipo).length;
+  }
+
+  cargarVentas(): void {
+    this.svc.getVentas().subscribe({
+      next: lista => this.ventas.set(lista),
+      error: () => this.svc.mostrarToast('No se pudieron cargar las ventas anuladas', 'error')
+    });
+  }
+
+  /* PDF por impresión: mismo mecanismo que Historial y Dashboard */
+  exportarPdf(): void {
+    const ahora = new Date();
+    this.generado.set(ahora.toLocaleString('es-PE'));
+    const tituloOriginal = document.title;
+    document.title = `Reporte-Registros-Eliminados-${ahora.toISOString().slice(0, 10)}`;
+    document.body.classList.add('imprimiendo-eliminados');
+    const limpiar = () => {
+      document.body.classList.remove('imprimiendo-eliminados');
+      document.title = tituloOriginal;
+      window.removeEventListener('afterprint', limpiar);
+    };
+    window.addEventListener('afterprint', limpiar);
+    setTimeout(() => window.print(), 100);
+  }
 
   modalProducto = signal(false);
   modalUsuario = signal(false);
@@ -70,6 +145,7 @@ export class Gestion {
     }
     this.cargarProductos();
     this.cargarUsuarios();
+    this.cargarVentas();
   }
 
   cargarProductos(): void {

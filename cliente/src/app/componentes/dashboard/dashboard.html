@@ -19,55 +19,532 @@
     </div>
   </div>
 
-  <!-- PATRÓN 4: Tarjetas (Card Pattern) - Indicadores -->
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-    @for (t of tarjetas(); track t.titulo) {
-      <div class="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm hover:shadow-md transition">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">{{ t.titulo }}</span>
-          <div class="w-10 h-10 rounded-xl flex items-center justify-center text-lg" [class]="t.color">
-            <i class="fa-solid" [class]="t.icono"></i>
+  <!-- Reportes: botones para cambiar de reporte, rango de fechas y exportación -->
+  <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 space-y-2">
+    <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+
+      <div class="flex flex-wrap items-center gap-2">
+        <button type="button" (click)="vista.set('indicadores')"
+                class="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+                [class]="vista() === 'indicadores' ? 'bg-pastry-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'">
+          <i class="fa-solid fa-chart-line"></i> Indicadores
+        </button>
+        <button type="button" (click)="vista.set('ventas')"
+                class="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+                [class]="vista() === 'ventas' ? 'bg-pastry-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'">
+          <i class="fa-solid fa-arrows-up-down"></i> Máx / Mín / Promedio por venta
+        </button>
+        <button type="button" (click)="vista.set('ingresos')"
+                class="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+                [class]="vista() === 'ingresos' ? 'bg-pastry-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'">
+          <i class="fa-solid fa-coins"></i> Ingresos
+        </button>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <label class="flex items-center gap-1.5 text-xs text-slate-500">Desde
+          <input type="date" [value]="desde()" (change)="desde.set($any($event.target).value)" [attr.max]="hasta() || null"
+                 class="px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-pastry-500">
+        </label>
+        <label class="flex items-center gap-1.5 text-xs text-slate-500">Hasta
+          <input type="date" [value]="hasta()" (change)="hasta.set($any($event.target).value)" [attr.min]="desde() || null"
+                 class="px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-pastry-500">
+        </label>
+        <button type="button" (click)="limpiarFiltros()"
+                class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold rounded-xl transition">
+          Limpiar
+        </button>
+        <button type="button" (click)="exportarPdf()" [disabled]="!hayDatos()"
+                title="Exportar el reporte que se está viendo"
+                class="px-3 py-2 bg-pastry-600 hover:bg-pastry-700 text-white text-xs font-semibold rounded-xl transition flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed">
+          <i class="fa-solid fa-file-pdf"></i> Exportar PDF
+        </button>
+      </div>
+    </div>
+
+    @if (rangoInvalido()) {
+      <p class="text-[11px] text-red-600 font-medium">
+        <i class="fa-solid fa-circle-exclamation"></i> La fecha "Desde" no puede ser posterior a "Hasta".
+      </p>
+    }
+    <p class="text-[11px] text-slate-400">
+      <i class="fa-solid fa-circle-info"></i>
+      Los reportes se calculan con las ventas registradas en el sistema (las anuladas no cuentan).
+    </p>
+  </div>
+
+  @if (cargando()) {
+    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 text-center text-sm text-slate-400">
+      Cargando reportes...
+    </div>
+  } @else if (!hayDatos()) {
+    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 text-center text-sm text-slate-400">
+      No hay ventas registradas en el rango seleccionado.
+    </div>
+  } @else if (vista() === 'indicadores') {
+
+    <!-- ===== REPORTE 1: INDICADORES ===== -->
+
+    <!-- PATRÓN 4: Tarjetas (Card Pattern) - Indicadores -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+      @for (t of tarjetas(); track t.titulo) {
+        <div class="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm hover:shadow-md transition">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">{{ t.titulo }}</span>
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center text-lg" [class]="t.color">
+              <i class="fa-solid" [class]="t.icono"></i>
+            </div>
+          </div>
+          <div class="mt-3">
+            <h3 class="text-2xl font-black text-slate-800">{{ t.actual }}</h3>
+            <p class="mt-1 text-[11px] leading-snug text-slate-400">{{ t.base }}</p>
+            <div class="mt-3 pt-3 border-t border-slate-100 text-xs space-y-1 text-slate-600">
+              <div class="flex justify-between"><span><strong>Máximo:</strong></span><span>{{ t.max }}</span></div>
+              <div class="flex justify-between"><span><strong>Mínimo:</strong></span><span>{{ t.min }}</span></div>
+              <div class="flex justify-between"><span><strong>Promedio:</strong></span><span>{{ t.prom }}</span></div>
+            </div>
           </div>
         </div>
-        <div class="mt-3">
-          <h3 class="text-2xl font-black text-slate-800">{{ t.actual }}</h3>
-          <div class="mt-3 pt-3 border-t border-slate-100 text-xs space-y-1 text-slate-600">
-            <div class="flex justify-between"><span><strong>Máximo:</strong></span><span>{{ t.max }}</span></div>
-            <div class="flex justify-between"><span><strong>Mínimo:</strong></span><span>{{ t.min }}</span></div>
-            <div class="flex justify-between"><span><strong>Promedio:</strong></span><span>{{ t.prom }}</span></div>
+      }
+    </div>
+
+    <!-- Gráficos de los indicadores -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-bold text-slate-800 text-sm uppercase tracking-wide">
+            <i class="fa-solid fa-chart-column text-pastry-600 mr-2"></i> Evolución Mensual de Ventas (S/)
+          </h3>
+          <span class="text-xs text-slate-400 font-medium">Comparativo Histórico</span>
+        </div>
+        <div class="relative h-64">
+          <canvas #salesChart></canvas>
+        </div>
+      </div>
+
+      <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
+        <div>
+          <h3 class="font-bold text-slate-800 text-sm uppercase tracking-wide mb-4">
+            <i class="fa-solid fa-percent text-pastry-600 mr-2"></i> Crecimiento Mensual (%)
+          </h3>
+          <div class="relative h-48 flex items-center justify-center">
+            <canvas #growthChart></canvas>
           </div>
+        </div>
+        <div class="mt-4 pt-4 border-t border-slate-100 text-center text-xs text-slate-500">
+          Variación del monto de ventas respecto al mes anterior (necesita al menos dos meses con ventas).
+        </div>
+      </div>
+    </div>
+
+  } @else if (vista() === 'ingresos') {
+
+    <!-- ===== REPORTE 3: INGRESOS GENERADOS POR LAS VENTAS ===== -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+      <div class="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Ingreso total del periodo</span>
+          <div class="w-10 h-10 rounded-xl flex items-center justify-center text-lg bg-emerald-50 text-emerald-600"><i class="fa-solid fa-sack-dollar"></i></div>
+        </div>
+        <h3 class="mt-3 text-2xl font-black text-slate-800">{{ sol(ingresosTotales().total) }}</h3>
+        <p class="text-[11px] text-slate-400 mt-1">Subtotal {{ sol(ingresosTotales().subtotal) }} + IGV {{ sol(ingresosTotales().igv) }}</p>
+      </div>
+      <div class="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Número de ventas</span>
+          <div class="w-10 h-10 rounded-xl flex items-center justify-center text-lg bg-blue-50 text-blue-600"><i class="fa-solid fa-receipt"></i></div>
+        </div>
+        <h3 class="mt-3 text-2xl font-black text-slate-800">{{ ingresosTotales().cantidad }}</h3>
+        <p class="text-[11px] text-slate-400 mt-1">Ventas vigentes en el rango seleccionado</p>
+      </div>
+    </div>
+
+    <!-- Ingresos por día -->
+    <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+      <h3 class="font-bold text-slate-800 text-sm uppercase tracking-wide">
+        <i class="fa-solid fa-calendar-day text-pastry-600 mr-2"></i> Ingresos por día
+      </h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 text-slate-500 uppercase tracking-wider font-bold">
+            <tr>
+              <th class="p-3 rounded-l-xl">Fecha</th>
+              <th class="p-3 text-right">Ventas</th>
+              <th class="p-3 text-right">Subtotal (S/)</th>
+              <th class="p-3 text-right">IGV (S/)</th>
+              <th class="p-3 text-right rounded-r-xl">Total (S/)</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
+            @for (d of ingresosPorDia(); track d.dia) {
+              <tr class="hover:bg-slate-50 transition">
+                <td class="p-3 font-bold text-slate-800">{{ fechaCorta(d.dia) }}</td>
+                <td class="p-3 text-right">{{ d.cantidad }}</td>
+                <td class="p-3 text-right font-mono">{{ d.subtotal.toFixed(2) }}</td>
+                <td class="p-3 text-right font-mono">{{ d.igv.toFixed(2) }}</td>
+                <td class="p-3 text-right font-mono font-bold">{{ d.total.toFixed(2) }}</td>
+              </tr>
+            }
+          </tbody>
+          <tfoot>
+            <tr class="border-t-2 border-slate-300 font-bold text-slate-900 bg-slate-50">
+              <td class="p-3">TOTAL GENERAL</td>
+              <td class="p-3 text-right">{{ ingresosTotales().cantidad }}</td>
+              <td class="p-3 text-right font-mono">{{ ingresosTotales().subtotal.toFixed(2) }}</td>
+              <td class="p-3 text-right font-mono">{{ ingresosTotales().igv.toFixed(2) }}</td>
+              <td class="p-3 text-right font-mono">{{ ingresosTotales().total.toFixed(2) }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Ingresos por tipo de comprobante -->
+      <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+        <h3 class="font-bold text-slate-800 text-sm uppercase tracking-wide">
+          <i class="fa-solid fa-file-invoice text-pastry-600 mr-2"></i> Ingresos por tipo de comprobante
+        </h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-50 text-slate-500 uppercase tracking-wider font-bold">
+              <tr>
+                <th class="p-3 rounded-l-xl">Comprobante</th>
+                <th class="p-3 text-right">Ventas</th>
+                <th class="p-3 text-right">Total (S/)</th>
+                <th class="p-3 text-right rounded-r-xl">% del total</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
+              @for (c of ingresosPorComprobante(); track c.nombre) {
+                <tr class="hover:bg-slate-50 transition">
+                  <td class="p-3 font-bold text-slate-800">{{ c.nombre }}</td>
+                  <td class="p-3 text-right">{{ c.cantidad }}</td>
+                  <td class="p-3 text-right font-mono">{{ c.total.toFixed(2) }}</td>
+                  <td class="p-3 text-right">{{ porcentaje(c.total) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Ingresos por vendedor -->
+      <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+        <h3 class="font-bold text-slate-800 text-sm uppercase tracking-wide">
+          <i class="fa-solid fa-user-tag text-pastry-600 mr-2"></i> Ingresos por vendedor
+        </h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-50 text-slate-500 uppercase tracking-wider font-bold">
+              <tr>
+                <th class="p-3 rounded-l-xl">Vendedor</th>
+                <th class="p-3 text-right">Ventas</th>
+                <th class="p-3 text-right">Total (S/)</th>
+                <th class="p-3 text-right rounded-r-xl">% del total</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
+              @for (u of ingresosPorVendedor(); track u.nombre) {
+                <tr class="hover:bg-slate-50 transition">
+                  <td class="p-3 font-bold text-slate-800">{{ u.nombre }}</td>
+                  <td class="p-3 text-right">{{ u.cantidad }}</td>
+                  <td class="p-3 text-right font-mono">{{ u.total.toFixed(2) }}</td>
+                  <td class="p-3 text-right">{{ porcentaje(u.total) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  } @else {
+
+    <!-- ===== REPORTE 2: MÁXIMO, MÍNIMO Y PROMEDIO POR VENTA ===== -->
+    @if (resumenGeneral(); as r) {
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+        <div class="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Venta máxima</span>
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center text-lg bg-emerald-50 text-emerald-600"><i class="fa-solid fa-arrow-up"></i></div>
+          </div>
+          <h3 class="mt-3 text-2xl font-black text-slate-800">{{ sol(r.maxima.total) }}</h3>
+          <p class="mt-2 text-xs text-slate-600"><strong class="font-mono">{{ r.maxima.id }}</strong> · {{ r.maxima.customer }}</p>
+          <p class="text-[11px] text-slate-400">{{ fechaCorta(r.maxima.date.slice(0, 10)) }} · {{ r.maxima.user }}</p>
+        </div>
+
+        <div class="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Venta mínima</span>
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center text-lg bg-amber-50 text-amber-600"><i class="fa-solid fa-arrow-down"></i></div>
+          </div>
+          <h3 class="mt-3 text-2xl font-black text-slate-800">{{ sol(r.minima.total) }}</h3>
+          <p class="mt-2 text-xs text-slate-600"><strong class="font-mono">{{ r.minima.id }}</strong> · {{ r.minima.customer }}</p>
+          <p class="text-[11px] text-slate-400">{{ fechaCorta(r.minima.date.slice(0, 10)) }} · {{ r.minima.user }}</p>
+        </div>
+
+        <div class="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Promedio por venta</span>
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center text-lg bg-blue-50 text-blue-600"><i class="fa-solid fa-calculator"></i></div>
+          </div>
+          <h3 class="mt-3 text-2xl font-black text-slate-800">{{ sol(r.promedio) }}</h3>
+          <p class="mt-2 text-xs text-slate-600">{{ r.cantidad }} ventas · total {{ sol(r.total) }}</p>
+          <p class="text-[11px] text-slate-400">En el rango seleccionado</p>
         </div>
       </div>
     }
-  </div>
 
-  <!-- Gráficos de los indicadores -->
-  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-    <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="font-bold text-slate-800 text-sm uppercase tracking-wide">
-          <i class="fa-solid fa-chart-column text-pastry-600 mr-2"></i> Evolución Mensual de Ventas (S/ vs. Ops)
-        </h3>
-        <span class="text-xs text-slate-400 font-medium">Comparativo Histórico</span>
-      </div>
-      <div class="relative h-64">
-        <canvas #salesChart></canvas>
+    <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+      <h3 class="font-bold text-slate-800 text-sm uppercase tracking-wide">
+        <i class="fa-solid fa-calendar-day text-pastry-600 mr-2"></i> Detalle por día
+      </h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 text-slate-500 uppercase tracking-wider font-bold">
+            <tr>
+              <th class="p-3 rounded-l-xl">Día</th>
+              <th class="p-3">Ventas</th>
+              <th class="p-3">Total (S/)</th>
+              <th class="p-3">Promedio (S/)</th>
+              <th class="p-3">Venta máxima</th>
+              <th class="p-3 rounded-r-xl">Venta mínima</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
+            @for (d of resumenPorDia(); track d.dia) {
+              <tr class="hover:bg-slate-50 transition">
+                <td class="p-3 font-bold text-slate-800">{{ fechaCorta(d.dia) }}</td>
+                <td class="p-3">{{ d.cantidad }}</td>
+                <td class="p-3 font-mono">{{ d.total.toFixed(2) }}</td>
+                <td class="p-3 font-mono">{{ d.promedio.toFixed(2) }}</td>
+                <td class="p-3">
+                  <span class="font-mono font-bold text-emerald-700">{{ sol(d.maxima.total) }}</span>
+                  <span class="block text-[11px] text-slate-500">{{ d.maxima.id }} · {{ d.maxima.customer }}</span>
+                </td>
+                <td class="p-3">
+                  <span class="font-mono font-bold text-amber-700">{{ sol(d.minima.total) }}</span>
+                  <span class="block text-[11px] text-slate-500">{{ d.minima.id }} · {{ d.minima.customer }}</span>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
       </div>
     </div>
-
-    <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
-      <div>
-        <h3 class="font-bold text-slate-800 text-sm uppercase tracking-wide mb-4">
-          <i class="fa-solid fa-percent text-pastry-600 mr-2"></i> Crecimiento Mensual (%)
-        </h3>
-        <div class="relative h-48 flex items-center justify-center">
-          <canvas #growthChart></canvas>
-        </div>
-      </div>
-      <div class="mt-4 pt-4 border-t border-slate-100 text-center text-xs text-slate-500">
-        Variación del monto de ventas respecto al mes anterior.
-      </div>
-    </div>
-  </div>
+  }
 
 </section>
+
+<!-- REPORTE PARA EXPORTAR A PDF: oculto en pantalla, solo se muestra al imprimir (ver styles.css) -->
+<div id="printableDashboard" class="reporte-dashboard text-slate-900">
+  <div class="border-b-2 border-slate-800 pb-2 mb-3">
+    <h1 class="font-serif text-xl font-bold">Pastelería José Luis</h1>
+    <h2 class="text-sm font-bold">{{ tituloReporte() }}</h2>
+    <p class="text-[10px] text-slate-600">
+      Generado: {{ generado() }} &nbsp;|&nbsp; Por: {{ usuarioActual()?.name }}
+      @if (filtrosAplicados()) { &nbsp;|&nbsp; Filtros: {{ filtrosAplicados() }} }
+    </p>
+  </div>
+
+  @if (vista() === 'indicadores') {
+    <table class="w-full text-left text-[10px] border-collapse">
+      <thead>
+        <tr class="border-b border-slate-800 uppercase font-bold">
+          <th class="py-1 pr-2">Indicador</th>
+          <th class="py-1 pr-2 text-right">Actual (último mes)</th>
+          <th class="py-1 pr-2 text-right">Máximo</th>
+          <th class="py-1 pr-2 text-right">Mínimo</th>
+          <th class="py-1 text-right">Promedio</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (t of tarjetas(); track t.titulo) {
+          <tr class="border-b border-slate-300">
+            <td class="py-1 pr-2 font-bold">{{ t.titulo }}<span class="block text-[9px] font-normal text-slate-500">{{ t.base }}</span></td>
+            <td class="py-1 pr-2 text-right font-mono">{{ t.actual }}</td>
+            <td class="py-1 pr-2 text-right font-mono">{{ t.max }}</td>
+            <td class="py-1 pr-2 text-right font-mono">{{ t.min }}</td>
+            <td class="py-1 text-right font-mono">{{ t.prom }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    <h3 class="mt-4 mb-1 text-xs font-bold">Detalle por mes</h3>
+    <table class="w-full text-left text-[10px] border-collapse">
+      <thead>
+        <tr class="border-b border-slate-800 uppercase font-bold">
+          <th class="py-1 pr-2">Mes</th>
+          <th class="py-1 pr-2 text-right">Ventas</th>
+          <th class="py-1 pr-2 text-right">Monto (S/)</th>
+          <th class="py-1 pr-2 text-right">Prom. por operación (S/)</th>
+          <th class="py-1 text-right">Crecimiento</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (f of filasMeses(); track f.mes) {
+          <tr class="border-b border-slate-300">
+            <td class="py-1 pr-2 font-bold">{{ f.mes }}</td>
+            <td class="py-1 pr-2 text-right font-mono">{{ f.cantidad }}</td>
+            <td class="py-1 pr-2 text-right font-mono">{{ f.monto.toFixed(2) }}</td>
+            <td class="py-1 pr-2 text-right font-mono">{{ f.promedio.toFixed(2) }}</td>
+            <td class="py-1 text-right font-mono">{{ f.crecimiento === null ? '—' : f.crecimiento.toFixed(2) + '%' }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  } @else if (vista() === 'ingresos') {
+    <table class="w-full text-left text-[10px] border-collapse mb-4">
+      <thead>
+        <tr class="border-b border-slate-800 uppercase font-bold">
+          <th class="py-1 pr-2">Resumen del periodo</th>
+          <th class="py-1 text-right">Valor</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="border-b border-slate-300">
+          <td class="py-1 pr-2 font-bold">Ingreso total</td>
+          <td class="py-1 text-right font-mono">S/ {{ ingresosTotales().total.toFixed(2) }}</td>
+        </tr>
+        <tr class="border-b border-slate-300">
+          <td class="py-1 pr-2 font-bold">Número de ventas</td>
+          <td class="py-1 text-right font-mono">{{ ingresosTotales().cantidad }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3 class="mb-1 text-xs font-bold">Ingresos por día</h3>
+    <table class="w-full text-left text-[10px] border-collapse mb-4">
+      <thead>
+        <tr class="border-b border-slate-800 uppercase font-bold">
+          <th class="py-1 pr-2">Fecha</th>
+          <th class="py-1 pr-2 text-right">Ventas</th>
+          <th class="py-1 pr-2 text-right">Subtotal (S/)</th>
+          <th class="py-1 pr-2 text-right">IGV (S/)</th>
+          <th class="py-1 text-right">Total (S/)</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (d of ingresosPorDia(); track d.dia) {
+          <tr class="border-b border-slate-300">
+            <td class="py-1 pr-2 font-bold">{{ fechaCorta(d.dia) }}</td>
+            <td class="py-1 pr-2 text-right font-mono">{{ d.cantidad }}</td>
+            <td class="py-1 pr-2 text-right font-mono">{{ d.subtotal.toFixed(2) }}</td>
+            <td class="py-1 pr-2 text-right font-mono">{{ d.igv.toFixed(2) }}</td>
+            <td class="py-1 text-right font-mono">{{ d.total.toFixed(2) }}</td>
+          </tr>
+        }
+        <tr class="border-t-2 border-slate-800 font-bold">
+          <td class="py-1 pr-2">TOTAL GENERAL</td>
+          <td class="py-1 pr-2 text-right font-mono">{{ ingresosTotales().cantidad }}</td>
+          <td class="py-1 pr-2 text-right font-mono">{{ ingresosTotales().subtotal.toFixed(2) }}</td>
+          <td class="py-1 pr-2 text-right font-mono">{{ ingresosTotales().igv.toFixed(2) }}</td>
+          <td class="py-1 text-right font-mono">{{ ingresosTotales().total.toFixed(2) }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3 class="mb-1 text-xs font-bold">Ingresos por tipo de comprobante</h3>
+    <table class="w-full text-left text-[10px] border-collapse mb-4">
+      <thead>
+        <tr class="border-b border-slate-800 uppercase font-bold">
+          <th class="py-1 pr-2">Comprobante</th>
+          <th class="py-1 pr-2 text-right">Ventas</th>
+          <th class="py-1 pr-2 text-right">Total (S/)</th>
+          <th class="py-1 text-right">% del total</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (c of ingresosPorComprobante(); track c.nombre) {
+          <tr class="border-b border-slate-300">
+            <td class="py-1 pr-2 font-bold">{{ c.nombre }}</td>
+            <td class="py-1 pr-2 text-right font-mono">{{ c.cantidad }}</td>
+            <td class="py-1 pr-2 text-right font-mono">{{ c.total.toFixed(2) }}</td>
+            <td class="py-1 text-right font-mono">{{ porcentaje(c.total) }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    <h3 class="mb-1 text-xs font-bold">Ingresos por vendedor</h3>
+    <table class="w-full text-left text-[10px] border-collapse">
+      <thead>
+        <tr class="border-b border-slate-800 uppercase font-bold">
+          <th class="py-1 pr-2">Vendedor</th>
+          <th class="py-1 pr-2 text-right">Ventas</th>
+          <th class="py-1 pr-2 text-right">Total (S/)</th>
+          <th class="py-1 text-right">% del total</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (u of ingresosPorVendedor(); track u.nombre) {
+          <tr class="border-b border-slate-300">
+            <td class="py-1 pr-2 font-bold">{{ u.nombre }}</td>
+            <td class="py-1 pr-2 text-right font-mono">{{ u.cantidad }}</td>
+            <td class="py-1 pr-2 text-right font-mono">{{ u.total.toFixed(2) }}</td>
+            <td class="py-1 text-right font-mono">{{ porcentaje(u.total) }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  } @else {
+    @if (resumenGeneral(); as r) {
+      <table class="w-full text-left text-[10px] border-collapse mb-4">
+        <thead>
+          <tr class="border-b border-slate-800 uppercase font-bold">
+            <th class="py-1 pr-2">Resumen del periodo</th>
+            <th class="py-1 pr-2 text-right">Monto (S/)</th>
+            <th class="py-1">Detalle</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="border-b border-slate-300">
+            <td class="py-1 pr-2 font-bold">Venta máxima</td>
+            <td class="py-1 pr-2 text-right font-mono">{{ r.maxima.total.toFixed(2) }}</td>
+            <td class="py-1">{{ r.maxima.id }} · {{ r.maxima.customer }} · {{ fechaCorta(r.maxima.date.slice(0, 10)) }}</td>
+          </tr>
+          <tr class="border-b border-slate-300">
+            <td class="py-1 pr-2 font-bold">Venta mínima</td>
+            <td class="py-1 pr-2 text-right font-mono">{{ r.minima.total.toFixed(2) }}</td>
+            <td class="py-1">{{ r.minima.id }} · {{ r.minima.customer }} · {{ fechaCorta(r.minima.date.slice(0, 10)) }}</td>
+          </tr>
+          <tr class="border-b border-slate-300">
+            <td class="py-1 pr-2 font-bold">Promedio por venta</td>
+            <td class="py-1 pr-2 text-right font-mono">{{ r.promedio.toFixed(2) }}</td>
+            <td class="py-1">{{ r.cantidad }} ventas · total S/ {{ r.total.toFixed(2) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    }
+
+    <h3 class="mb-1 text-xs font-bold">Detalle por día</h3>
+    <table class="w-full text-left text-[10px] border-collapse">
+      <thead>
+        <tr class="border-b border-slate-800 uppercase font-bold">
+          <th class="py-1 pr-2">Día</th>
+          <th class="py-1 pr-2 text-right">Ventas</th>
+          <th class="py-1 pr-2 text-right">Total (S/)</th>
+          <th class="py-1 pr-2 text-right">Promedio (S/)</th>
+          <th class="py-1 pr-2">Venta máxima</th>
+          <th class="py-1">Venta mínima</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (d of resumenPorDia(); track d.dia) {
+          <tr class="border-b border-slate-300">
+            <td class="py-1 pr-2 font-bold">{{ fechaCorta(d.dia) }}</td>
+            <td class="py-1 pr-2 text-right font-mono">{{ d.cantidad }}</td>
+            <td class="py-1 pr-2 text-right font-mono">{{ d.total.toFixed(2) }}</td>
+            <td class="py-1 pr-2 text-right font-mono">{{ d.promedio.toFixed(2) }}</td>
+            <td class="py-1 pr-2">S/ {{ d.maxima.total.toFixed(2) }} ({{ d.maxima.id }} · {{ d.maxima.customer }})</td>
+            <td class="py-1">S/ {{ d.minima.total.toFixed(2) }} ({{ d.minima.id }} · {{ d.minima.customer }})</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+
+  <p class="mt-3 text-[10px] text-slate-600">Se consideran solo las ventas vigentes; las anuladas no se incluyen.</p>
+</div>

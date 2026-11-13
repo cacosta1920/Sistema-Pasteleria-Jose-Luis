@@ -72,9 +72,37 @@
     top: 0;
     width: 100%;
   }
+
+  /* Reportes del Dashboard (Exportar PDF): igual que el historial, con su propia clase */
+  body.imprimiendo-dashboard #printableDashboard,
+  body.imprimiendo-dashboard #printableDashboard * {
+    visibility: visible;
+  }
+  body.imprimiendo-dashboard #printableDashboard {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+
+  /* Registros eliminados (Gestión) */
+  body.imprimiendo-eliminados #printableEliminados,
+  body.imprimiendo-eliminados #printableEliminados * {
+    visibility: visible;
+  }
+  body.imprimiendo-eliminados #printableEliminados {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
 }
 
-/* Reporte del historial: oculto en pantalla */
-.reporte-historial {
+/* Reportes para exportar a PDF: ocultos en pantalla */
+.reporte-historial,
+.reporte-dashboard,
+.reporte-eliminados {
   display: none;
 }

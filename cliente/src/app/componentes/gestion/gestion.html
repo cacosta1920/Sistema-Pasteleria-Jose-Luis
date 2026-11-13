@@ -142,7 +142,96 @@
     </div>
   </div>
 
+  <!-- Reporte: Registros eliminados (lógicamente) -->
+  <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+        <i class="fa-solid fa-trash-can-arrow-up text-pastry-600"></i> Registros Eliminados
+      </h3>
+      <div class="flex flex-wrap items-center gap-2">
+        <select [value]="filtroTipo()" (change)="filtroTipo.set($any($event.target).value)"
+                class="px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-pastry-500">
+          <option value="Todos">Todos los tipos</option>
+          <option value="Venta">Ventas anuladas</option>
+          <option value="Producto">Productos inactivos</option>
+          <option value="Usuario">Usuarios inactivos</option>
+        </select>
+        <button (click)="exportarPdf()" [disabled]="registrosFiltrados().length === 0"
+                class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-sm disabled:opacity-60 disabled:cursor-not-allowed">
+          <i class="fa-solid fa-file-pdf"></i> Exportar PDF
+        </button>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-3 gap-3 text-center">
+      <div class="bg-slate-50 rounded-xl p-3"><p class="text-[10px] uppercase font-bold text-slate-400">Ventas anuladas</p><p class="text-xl font-bold text-slate-800">{{ contador('Venta') }}</p></div>
+      <div class="bg-slate-50 rounded-xl p-3"><p class="text-[10px] uppercase font-bold text-slate-400">Productos inactivos</p><p class="text-xl font-bold text-slate-800">{{ contador('Producto') }}</p></div>
+      <div class="bg-slate-50 rounded-xl p-3"><p class="text-[10px] uppercase font-bold text-slate-400">Usuarios inactivos</p><p class="text-xl font-bold text-slate-800">{{ contador('Usuario') }}</p></div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs">
+        <thead class="bg-slate-50 text-slate-500 uppercase tracking-wider font-bold">
+          <tr>
+            <th class="p-3 rounded-l-xl">Tipo</th>
+            <th class="p-3">Registro</th>
+            <th class="p-3">Descripción</th>
+            <th class="p-3">Fecha / Categoría / Rol</th>
+            <th class="p-3 rounded-r-xl">Estado</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          @for (r of registrosFiltrados(); track r.tipo + r.registro) {
+            <tr class="hover:bg-slate-50">
+              <td class="p-3"><span class="px-2 py-0.5 bg-pastry-100 text-pastry-800 rounded text-[10px] font-bold">{{ r.tipo }}</span></td>
+              <td class="p-3 font-bold text-slate-800">{{ r.registro }}</td>
+              <td class="p-3 text-slate-600">{{ r.descripcion }}</td>
+              <td class="p-3 text-slate-600">{{ r.detalle }}</td>
+              <td class="p-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600">{{ r.tipo === 'Venta' ? 'Anulada' : 'Inactivo' }}</span></td>
+            </tr>
+          } @empty {
+            <tr><td colspan="5" class="text-center py-8 text-slate-400">No hay registros eliminados.</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    <p class="text-[11px] text-slate-400">
+      <i class="fa-solid fa-circle-info"></i>
+      Muestra los registros con eliminación lógica vigente. Los eliminados definitivamente ya no existen en la base de datos y no aparecen aquí.
+    </p>
+  </div>
+
 </section>
+
+<!-- Reporte imprimible (oculto en pantalla; solo se imprime al exportar PDF) -->
+<div id="printableEliminados" class="reporte-eliminados">
+  <h1 style="font-size:20px;font-weight:bold;margin:0">Pastelería José Luis — Reporte de Registros Eliminados</h1>
+  <p style="font-size:11px;margin:4px 0">Generado: {{ generado() }} · Por: {{ usuarioActual()?.name }}</p>
+  <p style="font-size:11px;margin:4px 0 12px">Filtro: {{ filtroTipo() }} · Total: {{ registrosFiltrados().length }}
+    (Ventas: {{ contador('Venta') }}, Productos: {{ contador('Producto') }}, Usuarios: {{ contador('Usuario') }})</p>
+  <table style="width:100%;border-collapse:collapse;font-size:11px">
+    <thead>
+      <tr style="background:#eee">
+        <th style="border:1px solid #999;padding:4px;text-align:left">Tipo</th>
+        <th style="border:1px solid #999;padding:4px;text-align:left">Registro</th>
+        <th style="border:1px solid #999;padding:4px;text-align:left">Descripción</th>
+        <th style="border:1px solid #999;padding:4px;text-align:left">Fecha / Categoría / Rol</th>
+        <th style="border:1px solid #999;padding:4px;text-align:left">Estado</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (r of registrosFiltrados(); track r.tipo + r.registro) {
+        <tr>
+          <td style="border:1px solid #999;padding:4px">{{ r.tipo }}</td>
+          <td style="border:1px solid #999;padding:4px">{{ r.registro }}</td>
+          <td style="border:1px solid #999;padding:4px">{{ r.descripcion }}</td>
+          <td style="border:1px solid #999;padding:4px">{{ r.detalle }}</td>
+          <td style="border:1px solid #999;padding:4px">{{ r.tipo === 'Venta' ? 'Anulada' : 'Inactivo' }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>
 
 <!-- MODAL: Producto (agregar / editar) -->
 @if (modalProducto()) {
