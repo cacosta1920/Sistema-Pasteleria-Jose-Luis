@@ -37,16 +37,20 @@ export class HistorialVentas {
   cargando = signal(true);
 
   /* Filtros */
-  fecha = signal('');
+  desde = signal('');
+  hasta = signal('');
+  rangoInvalido = computed(() => !!this.desde() && !!this.hasta() && this.desde() > this.hasta());
   texto = signal('');
   verAnuladas = signal(false);
 
   ventasFiltradas = computed(() => {
-    const fecha = this.fecha();
+    const desde = this.desde();
+    const hasta = this.hasta();
     const texto = this.texto().toLowerCase();
     return this.ventas().filter(v =>
       (this.verAnuladas() || v.estado !== 0) &&
-      (!fecha || v.date.startsWith(fecha)) &&
+      (!desde || v.date.slice(0, 10) >= desde) &&
+      (!hasta || v.date.slice(0, 10) <= hasta) &&
       (v.customer.toLowerCase().includes(texto) || v.id.toLowerCase().includes(texto))
     );
   });
@@ -81,7 +85,8 @@ export class HistorialVentas {
   }
 
   limpiarFiltros(): void {
-    this.fecha.set('');
+    this.desde.set('');
+    this.hasta.set('');
     this.texto.set('');
   }
 
@@ -105,7 +110,8 @@ export class HistorialVentas {
 
   filtrosAplicados(): string {
     return [
-      this.fecha() ? `Fecha: ${this.fecha()}` : '',
+      this.desde() ? `Desde: ${this.desde().split('-').reverse().join('/')}` : '',
+      this.hasta() ? `Hasta: ${this.hasta().split('-').reverse().join('/')}` : '',
       this.texto() ? `Búsqueda: "${this.texto()}"` : '',
       this.verAnuladas() ? 'Incluye anuladas' : ''
     ].filter(Boolean).join('  |  ');

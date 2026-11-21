@@ -9,8 +9,14 @@
 
       <!-- Filtros -->
       <div class="flex flex-wrap items-center gap-2">
-        <input type="date" name="fecha" [ngModel]="fecha()" (ngModelChange)="fecha.set($event)"
-               class="px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-pastry-500">
+        <label class="flex items-center gap-1.5 text-xs text-slate-500">Desde
+          <input type="date" name="desde" [ngModel]="desde()" (ngModelChange)="desde.set($event)" [attr.max]="hasta() || null"
+                 class="px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-pastry-500">
+        </label>
+        <label class="flex items-center gap-1.5 text-xs text-slate-500">Hasta
+          <input type="date" name="hasta" [ngModel]="hasta()" (ngModelChange)="hasta.set($event)" [attr.min]="desde() || null"
+                 class="px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-pastry-500">
+        </label>
 
         <div class="relative">
           <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
@@ -38,6 +44,11 @@
         </button>
       </div>
     </div>
+    @if (rangoInvalido()) {
+      <p class="text-[11px] text-red-600 font-medium">
+        <i class="fa-solid fa-circle-exclamation"></i> La fecha "Desde" no puede ser posterior a "Hasta".
+      </p>
+    }
 
     <!-- Tabla del historial -->
     <div class="overflow-x-auto">
