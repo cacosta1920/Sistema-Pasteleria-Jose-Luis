@@ -97,7 +97,7 @@ export function evaluarPassword(clave: string): ReglaPassword[] {
 export class Pasteleria {
   private http = inject(HttpClient);
   private router = inject(Router);
-  private apiUrl = 'http://localhost:3000/api';
+  private apiUrl = 'https://sistema-pasteleria-jose-luis-api.onrender.com';
 
   /* ---------- Sesión ---------- */
   private token = signal<string>(this.leerStorage('pjl_token'));
