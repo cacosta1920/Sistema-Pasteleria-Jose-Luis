@@ -7,25 +7,29 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '100kb' }));
 
-// Conexión a la base de datos pasteleria
+
+// Conexión a la base de datos TiDB Cloud
 const db = mysql.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: 'admin',
-    database: 'pasteleria',
-    decimalNumbers: true   // devuelve los DECIMAL como números y no como texto
+    host: process.env.DB_HOST,
+    port: Number(process.env.DB_PORT || 4000),
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    decimalNumbers: true,
+    ssl: {
+        minVersion: 'TLSv1.2'
+    }
 });
 
 db.connect(err => {
     if (err) {
-        console.error('Error al conectar a la BD pasteleria:', err);
+        console.error('Error al conectar a TiDB Cloud:', err);
         return;
     }
-    console.log('Conectado exitosamente a la base de datos pasteleria');
+
+    console.log('Conectado exitosamente a TiDB Cloud');
     protegerContrasenas();
 });
-
-
 
 /* =====================================================
    VALIDACIONES (tipo de dato, longitud y rango)
@@ -824,7 +828,7 @@ app.use((err, req, res, next) => {
     res.status(400).json({ message: 'Solicitud no válida' });
 });
 
-const PORT = 3000;
-app.listen(PORT, () => {
-    console.log(`Servidor corriendo en http://localhost:${PORT}`);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Servidor corriendo en el puerto ${PORT}`);
 });
