@@ -1,7 +1,12 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { Pasteleria, Producto, Usuario, Venta, evaluarPassword } from '../../services/pasteleria';
+import { Chart, registerables } from 'chart.js';
+import { EMPTY, catchError, exhaustMap, timer } from 'rxjs';
+import { Monitoreo, Pasteleria, Producto, Usuario, Venta, evaluarPassword } from '../../services/pasteleria';
+
+Chart.register(...registerables);
 
 type TipoRegistro = 'Venta' | 'Producto' | 'Usuario';
 
@@ -38,6 +43,7 @@ interface FormUsuario {
 export class Gestion {
   private svc = inject(Pasteleria);
   private router = inject(Router);
+  private destroyRef = inject(DestroyRef);
 
   /* Listas completas (activos e inactivos) y filtros de visualización */
   productos = signal<Producto[]>([]);
@@ -120,6 +126,111 @@ export class Gestion {
     setTimeout(() => window.print(), 100);
   }
 
+  /* ===== Monitoreo del sistema (CPU, memoria y subprocesos) ===== */
+  monitoreo = signal<Monitoreo | null>(null);
+  monitoreoAbierto = signal(false);     // sección plegable: cerrada por defecto
+  verProcesos = signal(false);
+  verTareas = signal(false);
+  monitoreoActivo = signal(true);
+  monitoreoError = signal(false);
+  ultimaMuestra = computed(() => {
+    const m = this.monitoreo()?.muestras ?? [];
+    return m.length ? m[m.length - 1] : null;
+  });
+
+  private cpuCanvas = viewChild<ElementRef<HTMLCanvasElement>>('cpuChart');
+  private memCanvas = viewChild<ElementRef<HTMLCanvasElement>>('memChart');
+  private cpuChart?: Chart;
+  private memChart?: Chart;
+
+  alternarSeccionMonitoreo(): void {
+    this.monitoreoAbierto.update(v => !v);
+  }
+
+  alternarMonitoreo(): void {
+    this.monitoreoActivo.update(v => !v);
+  }
+
+  private iniciarMonitoreo(): void {
+    // Consulta el servidor cada 2 s mientras el monitoreo esté activo (exhaustMap: no apila peticiones)
+    timer(0, 2000).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      exhaustMap(() => {
+        // Solo consulta al servidor si la sección está abierta y no está en pausa
+        if (!this.monitoreoAbierto() || !this.monitoreoActivo()) return EMPTY;
+        return this.svc.getMonitoreo().pipe(catchError(() => {
+          this.monitoreoError.set(true);
+          return EMPTY;
+        }));
+      })
+    ).subscribe(datos => {
+      this.monitoreoError.set(false);
+      this.monitoreo.set(datos);
+    });
+
+    // Dibuja o actualiza los gráficos cada vez que llegan datos nuevos
+    effect(() => {
+      const muestras = this.monitoreo()?.muestras ?? [];
+      const cpu = this.cpuCanvas();
+      const mem = this.memCanvas();
+      if (!cpu || !mem || muestras.length === 0) {
+        // Sección cerrada (los canvas no existen): se liberan los gráficos
+        this.cpuChart?.destroy();
+        this.memChart?.destroy();
+        this.cpuChart = undefined;
+        this.memChart = undefined;
+        return;
+      }
+
+      const etiquetas = muestras.map(m => new Date(m.hora).toLocaleTimeString('es-PE'));
+      if (!this.cpuChart) {
+        this.cpuChart = this.crearGrafico(cpu.nativeElement, [
+          { label: 'CPU del sistema (%)', borderColor: '#db3158', backgroundColor: 'rgba(219,49,88,0.1)' },
+          { label: 'CPU de la aplicación (%)', borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.1)' }
+        ], 100);
+        this.memChart = this.crearGrafico(mem.nativeElement, [
+          { label: 'Memoria del sistema (%)', borderColor: '#059669', backgroundColor: 'rgba(5,150,105,0.1)' }
+        ], 100);
+      }
+      this.actualizarGrafico(this.cpuChart, etiquetas, [muestras.map(m => m.cpuSistema), muestras.map(m => m.cpuProceso)]);
+      this.actualizarGrafico(this.memChart!, etiquetas, [muestras.map(m => m.memSistemaPct)]);
+    });
+
+    this.destroyRef.onDestroy(() => {
+      this.cpuChart?.destroy();
+      this.memChart?.destroy();
+    });
+  }
+
+  private crearGrafico(canvas: HTMLCanvasElement, series: { label: string; borderColor: string; backgroundColor: string }[], maximo: number): Chart {
+    return new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: series.map(s => ({ ...s, data: [], fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 }))
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        scales: { y: { min: 0, max: maximo }, x: { ticks: { maxTicksLimit: 6 } } },
+        plugins: { legend: { display: true, labels: { boxWidth: 10, font: { size: 10 } } } }
+      }
+    });
+  }
+
+  private actualizarGrafico(grafico: Chart, etiquetas: string[], series: number[][]): void {
+    grafico.data.labels = etiquetas;
+    series.forEach((datos, i) => (grafico.data.datasets[i].data = datos));
+    grafico.update();
+  }
+
+  formatoUptime(segundos: number): string {
+    const h = Math.floor(segundos / 3600);
+    const m = Math.floor((segundos % 3600) / 60);
+    return h > 0 ? `${h} h ${m} min` : `${m} min ${segundos % 60} s`;
+  }
+
   modalProducto = signal(false);
   modalUsuario = signal(false);
   guardando = signal(false);
@@ -146,6 +257,7 @@ export class Gestion {
     this.cargarProductos();
     this.cargarUsuarios();
     this.cargarVentas();
+    this.iniciarMonitoreo();
   }
 
   cargarProductos(): void {

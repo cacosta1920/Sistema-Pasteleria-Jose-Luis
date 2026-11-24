@@ -68,6 +68,46 @@ export interface MesResumen {
   montoTotal: number;
 }
 
+export interface MuestraMonitoreo {
+  hora: number;
+  cpuSistema: number;
+  cpuProceso: number;
+  memSistemaPct: number;
+  memSistemaUsadaMB: number;
+  memSistemaTotalMB: number;
+  rssMB: number;
+  heapUsadoMB: number;
+  heapTotalMB: number;
+  retrasoMs: number;
+  recursosActivos: number | null;
+  hilos: number | null;            // solo en Linux
+  procesosSistema: number | null;
+}
+
+export interface ProcesoSistema {
+  nombre: string;
+  pid: number;
+  memoriaMB: number;
+  cpu: number | null;      // null en Windows
+  estaApp: boolean;        // true = es el proceso del servidor de esta aplicación
+}
+
+export interface TareaActiva {
+  tipo: string;
+  cantidad: number;
+}
+
+export interface Monitoreo {
+  detalle: { procesos: ProcesoSistema[]; tareasActivas: TareaActiva[] };
+  plataforma: string;
+  entorno: 'contenedor' | 'equipo';   // contenedor = límites asignados al servicio (Render, Docker)
+  nucleos: number;
+  nodeVersion: string;
+  uptimeSegundos: number;
+  intervaloMs: number;
+  muestras: MuestraMonitoreo[];
+}
+
 export interface Toast {
   id: number;
   message: string;
@@ -256,6 +296,10 @@ export class Pasteleria {
   // Eliminación física (solo administrador): borra una venta ya anulada
   eliminarVenta(codigo: number): Observable<{ message: string }> {
     return this.peticion(this.http.delete<{ message: string }>(`${this.apiUrl}/ventas/${codigo}`, this.opts()));
+  }
+
+  getMonitoreo(): Observable<Monitoreo> {
+    return this.peticion(this.http.get<Monitoreo>(`${this.apiUrl}/monitoreo`, this.opts()));
   }
 
   getResumenMensual(): Observable<MesResumen[]> {

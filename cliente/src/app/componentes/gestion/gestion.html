@@ -201,6 +201,140 @@
     </p>
   </div>
 
+  <!-- Monitoreo del sistema: CPU, memoria y subprocesos (sección plegable, cerrada por defecto) -->
+  <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <button type="button" (click)="alternarSeccionMonitoreo()" [attr.aria-expanded]="monitoreoAbierto()"
+              class="flex items-center gap-2 font-bold text-slate-800 text-base text-left">
+        <i class="fa-solid fa-chevron-right text-xs text-slate-400 transition-transform" [class.rotate-90]="monitoreoAbierto()"></i>
+        <i class="fa-solid fa-microchip text-pastry-600"></i> Monitoreo del Sistema
+        @if (!monitoreoAbierto()) {
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600">Cerrado</span>
+        } @else if (monitoreoError()) {
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700">Sin conexión</span>
+        } @else if (monitoreoActivo()) {
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">En vivo</span>
+        } @else {
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600">En pausa</span>
+        }
+      </button>
+      @if (monitoreoAbierto()) {
+        <button (click)="alternarMonitoreo()"
+                class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-sm">
+          <i class="fa-solid" [class.fa-pause]="monitoreoActivo()" [class.fa-play]="!monitoreoActivo()"></i>
+          {{ monitoreoActivo() ? 'Pausar' : 'Reanudar' }}
+        </button>
+      }
+    </div>
+
+    @if (monitoreoAbierto()) {
+      @if (monitoreo(); as info) {
+        <p class="text-[11px] text-slate-400">
+          {{ info.entorno === 'contenedor' ? 'Contenedor del servicio' : 'Equipo del servidor' }}: {{ info.plataforma }} · {{ info.nucleos }} núcleos · Node {{ info.nodeVersion }} · servidor activo hace {{ formatoUptime(info.uptimeSegundos) }}
+        </p>
+      }
+
+      @if (ultimaMuestra(); as m) {
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <!-- CPU -->
+          <div class="bg-slate-50 rounded-xl p-4 space-y-1 text-xs text-slate-600">
+            <p class="text-[10px] uppercase font-bold text-slate-400"><i class="fa-solid fa-gauge-high mr-1"></i> CPU</p>
+            <div class="flex justify-between"><span>Sistema</span><strong class="text-slate-800">{{ m.cpuSistema.toFixed(1) }}%</strong></div>
+            <div class="flex justify-between"><span>Esta aplicación</span><strong class="text-slate-800">{{ m.cpuProceso.toFixed(1) }}%</strong></div>
+          </div>
+          <!-- Memoria -->
+          <div class="bg-slate-50 rounded-xl p-4 space-y-1 text-xs text-slate-600">
+            <p class="text-[10px] uppercase font-bold text-slate-400"><i class="fa-solid fa-memory mr-1"></i> Memoria</p>
+            <div class="flex justify-between"><span>Sistema</span><strong class="text-slate-800">{{ m.memSistemaUsadaMB.toFixed(0) }} / {{ m.memSistemaTotalMB.toFixed(0) }} MB ({{ m.memSistemaPct.toFixed(1) }}%)</strong></div>
+            <div class="flex justify-between"><span>Aplicación (RSS)</span><strong class="text-slate-800">{{ m.rssMB.toFixed(1) }} MB</strong></div>
+            <div class="flex justify-between"><span>Heap usado / total</span><strong class="text-slate-800">{{ m.heapUsadoMB.toFixed(1) }} / {{ m.heapTotalMB.toFixed(1) }} MB</strong></div>
+          </div>
+          <!-- Subprocesos -->
+          <div class="bg-slate-50 rounded-xl p-4 space-y-1 text-xs text-slate-600">
+            <p class="text-[10px] uppercase font-bold text-slate-400"><i class="fa-solid fa-diagram-project mr-1"></i> Subprocesos</p>
+            <div class="flex justify-between items-center"><span>Procesos del sistema</span>
+              <span class="flex items-center gap-2"><strong class="text-slate-800">{{ m.procesosSistema ?? '—' }}</strong>
+                <button type="button" (click)="verProcesos.set(!verProcesos())" class="text-[10px] font-bold text-pastry-600 hover:underline">{{ verProcesos() ? 'Ocultar' : 'Ver detalle' }}</button></span></div>
+            <div class="flex justify-between"><span>Hilos de la aplicación</span><strong class="text-slate-800">{{ m.hilos ?? 'No disponible' }}</strong></div>
+            <div class="flex justify-between items-center"><span>Tareas activas</span>
+              <span class="flex items-center gap-2"><strong class="text-slate-800">{{ m.recursosActivos ?? '—' }}</strong>
+                <button type="button" (click)="verTareas.set(!verTareas())" class="text-[10px] font-bold text-pastry-600 hover:underline">{{ verTareas() ? 'Ocultar' : 'Ver detalle' }}</button></span></div>
+            <div class="flex justify-between"><span>Retraso del hilo principal</span><strong class="text-slate-800">{{ m.retrasoMs.toFixed(2) }} ms</strong></div>
+          </div>
+        </div>
+      } @else {
+        <p class="text-xs text-slate-400 text-center py-4">
+          {{ monitoreoError() ? 'No se pudo consultar el monitoreo del servidor.' : 'Recopilando datos...' }}
+        </p>
+      }
+
+      @if (verProcesos() && monitoreo(); as info) {
+        <div class="overflow-x-auto">
+          <p class="text-[11px] font-bold text-slate-500 mb-1">Los 10 procesos del sistema que más memoria usan</p>
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-50 text-slate-500 uppercase tracking-wider font-bold">
+              <tr>
+                <th class="p-2 rounded-l-xl">Proceso</th>
+                <th class="p-2">PID</th>
+                <th class="p-2 text-right">Memoria (MB)</th>
+                <th class="p-2 text-right rounded-r-xl">CPU (%)</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-slate-700">
+              @for (p of info.detalle.procesos; track p.pid) {
+                <tr [class.bg-pastry-50]="p.estaApp">
+                  <td class="p-2 font-semibold">{{ p.nombre }}
+                    @if (p.estaApp) { <span class="ml-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-pastry-100 text-pastry-800">Esta aplicación</span> }
+                  </td>
+                  <td class="p-2 font-mono">{{ p.pid }}</td>
+                  <td class="p-2 text-right font-mono">{{ p.memoriaMB.toFixed(1) }}</td>
+                  <td class="p-2 text-right font-mono">{{ p.cpu === null ? '—' : p.cpu.toFixed(1) }}</td>
+                </tr>
+              } @empty {
+                <tr><td colspan="4" class="p-3 text-center text-slate-400">Aún no hay datos (se actualiza cada 10 segundos).</td></tr>
+              }
+            </tbody>
+          </table>
+          <p class="text-[10px] text-slate-400 mt-1">Se actualiza cada 10 segundos. La CPU por proceso es el porcentaje de un núcleo entre dos actualizaciones (Linux); en Mac es el promedio desde que arrancó el proceso y en Windows no se informa.</p>
+        </div>
+      }
+
+      @if (verTareas() && monitoreo(); as info) {
+        <div class="overflow-x-auto">
+          <p class="text-[11px] font-bold text-slate-500 mb-1">Tareas activas de la aplicación, por tipo</p>
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-50 text-slate-500 uppercase tracking-wider font-bold">
+              <tr>
+                <th class="p-2 rounded-l-xl">Tipo de tarea</th>
+                <th class="p-2 text-right rounded-r-xl">Cantidad</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-slate-700">
+              @for (t of info.detalle.tareasActivas; track t.tipo) {
+                <tr>
+                  <td class="p-2 font-mono">{{ t.tipo }}</td>
+                  <td class="p-2 text-right font-mono font-bold">{{ t.cantidad }}</td>
+                </tr>
+              } @empty {
+                <tr><td colspan="2" class="p-3 text-center text-slate-400">Sin tareas activas.</td></tr>
+              }
+            </tbody>
+          </table>
+          <p class="text-[10px] text-slate-400 mt-1">Ejemplos: Timeout (temporizadores), TCPSocketWrap / TCPServerWrap (conexiones de red), FSReqCallback (lectura de archivos).</p>
+        </div>
+      }
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="relative h-56"><canvas #cpuChart></canvas></div>
+        <div class="relative h-56"><canvas #memChart></canvas></div>
+      </div>
+      <p class="text-[11px] text-slate-400">
+        <i class="fa-solid fa-circle-info"></i>
+        Todos los datos son del servidor (en la nube, el contenedor del servicio), no del equipo desde el que se mira la pantalla; los porcentajes son sobre los recursos asignados al servicio. Se actualiza cada 2 segundos y muestra los últimos 2 minutos. "Hilos de la aplicación" solo está disponible cuando el servidor corre en Linux.
+      </p>
+    }
+  </div>
+
 </section>
 
 <!-- Reporte imprimible (oculto en pantalla; solo se imprime al exportar PDF) -->

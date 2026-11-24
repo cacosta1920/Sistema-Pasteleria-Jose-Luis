@@ -1,3 +1,6 @@
+// Carga el archivo .env si existe (en Render no hace falta: ahí las variables ya están definidas)
+try { process.loadEnvFile(); } catch (e) { /* sin .env: se usan las variables del sistema */ }
+
 const express = require('express');
 const mysql = require('mysql2');
 const cors = require('cors');
@@ -6,7 +9,6 @@ const crypto = require('crypto');   // incluido en Node: hash de contraseñas y 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '100kb' }));
-
 
 // Conexión a la base de datos TiDB Cloud
 const db = mysql.createConnection({
@@ -30,6 +32,8 @@ db.connect(err => {
     console.log('Conectado exitosamente a TiDB Cloud');
     protegerContrasenas();
 });
+
+
 
 /* =====================================================
    VALIDACIONES (tipo de dato, longitud y rango)
@@ -820,6 +824,284 @@ app.get('/api/ventas-resumen/mensual', autenticar, (req, res) => {
     db.query(query, (err, result) => {
         if (err) return responderError(res, err);
         res.json(result);
+    });
+});
+
+// =====================================================
+// MONITOREO DEL SISTEMA (solo administrador)
+// Usa solo módulos nativos de Node: os, process, perf_hooks, child_process y fs.
+// Una muestra cada 2 s se guarda en memoria (las últimas 60 = 2 minutos).
+//
+// En un contenedor (Render, Docker) os.cpus() y os.totalmem() devuelven los datos de la
+// máquina física, no los del servicio. Por eso, si existen los archivos de control del
+// contenedor (cgroups), se leen primero: así los porcentajes son sobre lo que el servicio
+// tiene asignado. Si no existen (Windows, Mac, PC propia), se usa el equipo completo.
+// =====================================================
+const os = require('os');
+const fs = require('fs');
+const { execFile } = require('child_process');
+const { monitorEventLoopDelay } = require('perf_hooks');
+
+const MON_INTERVALO_MS = 2000;
+const MON_MAX_MUESTRAS = 60;
+const historialMonitoreo = [];
+
+const retrasoEventLoop = monitorEventLoopDelay({ resolution: 20 });
+retrasoEventLoop.enable();
+
+const redondear1 = n => Math.round(n * 10) / 10;
+const aMB = bytes => redondear1(bytes / 1024 / 1024);
+
+function leerArchivo(ruta) {
+    try {
+        return fs.readFileSync(ruta, 'utf8').trim();
+    } catch (e) {
+        return null;
+    }
+}
+const numeroDe = texto => (texto === null ? NaN : Number(texto));
+
+// ---------- Memoria ----------
+// 'contenedor' = límites del servicio | 'equipo' = toda la máquina
+function leerMemoria() {
+    const totalEquipo = os.totalmem();
+
+    // cgroup v2 y, si no existe, cgroup v1
+    let usada = numeroDe(leerArchivo('/sys/fs/cgroup/memory.current'));
+    let limite = numeroDe(leerArchivo('/sys/fs/cgroup/memory.max'));
+    let stat = leerArchivo('/sys/fs/cgroup/memory.stat');
+    if (!Number.isFinite(usada)) {
+        usada = numeroDe(leerArchivo('/sys/fs/cgroup/memory/memory.usage_in_bytes'));
+        limite = numeroDe(leerArchivo('/sys/fs/cgroup/memory/memory.limit_in_bytes'));
+        stat = leerArchivo('/sys/fs/cgroup/memory/memory.stat');
+    }
+
+    if (Number.isFinite(usada)) {
+        // Se descarta la caché de archivos (igual que "docker stats"), que no es memoria ocupada
+        const cache = stat && stat.match(/^(?:total_)?inactive_file (\d+)/m);
+        if (cache) usada = Math.max(0, usada - Number(cache[1]));
+        const total = Number.isFinite(limite) && limite > 0 && limite < totalEquipo ? limite : totalEquipo;
+        return { usada, total, origen: 'contenedor' };
+    }
+    return { usada: totalEquipo - os.freemem(), total: totalEquipo, origen: 'equipo' };
+}
+
+// ---------- CPU ----------
+// Tiempos acumulados de todos los núcleos del equipo
+function leerTiemposCpu() {
+    let idle = 0, total = 0;
+    for (const c of os.cpus()) {
+        for (const tipo in c.times) total += c.times[tipo];
+        idle += c.times.idle;
+    }
+    return { idle, total };
+}
+
+// CPU consumida por el contenedor (microsegundos acumulados) y núcleos que tiene asignados
+function leerCpuContenedor() {
+    let nucleos = os.cpus().length;
+    let usoMicros = null;
+
+    const statV2 = leerArchivo('/sys/fs/cgroup/cpu.stat');
+    const m = statV2 && statV2.match(/^usage_usec (\d+)/m);
+    if (m) {
+        usoMicros = Number(m[1]);
+        const max = leerArchivo('/sys/fs/cgroup/cpu.max');           // "max 100000" o "50000 100000"
+        if (max) {
+            const [cuota, periodo] = max.split(' ');
+            if (cuota !== 'max' && Number(periodo) > 0) nucleos = Number(cuota) / Number(periodo);
+        }
+    } else {
+        const ns = numeroDe(leerArchivo('/sys/fs/cgroup/cpuacct/cpuacct.usage')
+            ?? leerArchivo('/sys/fs/cgroup/cpu,cpuacct/cpuacct.usage'));
+        if (Number.isFinite(ns)) {
+            usoMicros = ns / 1000;
+            const cuota = numeroDe(leerArchivo('/sys/fs/cgroup/cpu/cpu.cfs_quota_us')
+                ?? leerArchivo('/sys/fs/cgroup/cpu,cpuacct/cpu.cfs_quota_us'));
+            const periodo = numeroDe(leerArchivo('/sys/fs/cgroup/cpu/cpu.cfs_period_us')
+                ?? leerArchivo('/sys/fs/cgroup/cpu,cpuacct/cpu.cfs_period_us'));
+            if (cuota > 0 && periodo > 0) nucleos = cuota / periodo;
+        }
+    }
+    return usoMicros === null ? null : { usoMicros, nucleos };
+}
+
+let cpuEquipoPrev = leerTiemposCpu();
+let cpuContenedorPrev = leerCpuContenedor();
+let cpuProcesoPrev = { uso: process.cpuUsage(), t: process.hrtime.bigint() };
+let tPrev = process.hrtime.bigint();
+let entorno = 'equipo';
+let nucleosEfectivos = os.cpus().length;
+
+// ---------- Procesos del sistema ----------
+let procesosSistema = null;
+let topProcesos = [];
+
+// Linux: se leen los datos de /proc (no depende de que exista el comando "ps")
+let ticksPrev = new Map();
+let ticksT = 0;
+function listarProcesosLinux() {
+    const ahora = Date.now();
+    const dtSeg = ticksT ? (ahora - ticksT) / 1000 : 0;
+    const ticksNuevos = new Map();
+    const lista = [];
+
+    for (const pid of fs.readdirSync('/proc').filter(d => /^\d+$/.test(d))) {
+        const status = leerArchivo(`/proc/${pid}/status`);
+        const nombre = status && (status.match(/^Name:\s+(.*)$/m) || [])[1];
+        if (!nombre) continue;
+        const rssKB = Number((status.match(/^VmRSS:\s+(\d+)/m) || [])[1] || 0);
+
+        // CPU: ticks de usuario + sistema (campos 14 y 15 de /proc/<pid>/stat, a 100 ticks por segundo)
+        let cpu = null;
+        const stat = leerArchivo(`/proc/${pid}/stat`);
+        if (stat) {
+            const campos = stat.slice(stat.lastIndexOf(')') + 2).split(' ');
+            const ticks = Number(campos[11]) + Number(campos[12]);
+            ticksNuevos.set(pid, ticks);
+            if (dtSeg > 0 && ticksPrev.has(pid) && Number.isFinite(ticks)) {
+                cpu = redondear1(Math.max(0, ((ticks - ticksPrev.get(pid)) / 100 / dtSeg) * 100));
+            }
+        }
+        lista.push({ nombre, pid: Number(pid), memoriaMB: redondear1(rssKB / 1024), cpu });
+    }
+    ticksPrev = ticksNuevos;
+    ticksT = ahora;
+    return lista;
+}
+
+// Windows (tasklist) y Mac (ps): se interpreta la salida del comando
+function interpretarProcesos(salida) {
+    const lista = [];
+    for (const linea of salida.split('\n')) {
+        const texto = linea.trim();
+        if (!texto) continue;
+        if (process.platform === 'win32') {
+            // "node.exe","1234","Console","1","45.678 K"
+            const m = texto.match(/^"(.*?)","(\d+)","(.*?)","(.*?)","(.*?)"$/);
+            if (m) lista.push({ nombre: m[1], pid: Number(m[2]), memoriaMB: redondear1(Number(m[5].replace(/\D/g, '')) / 1024), cpu: null });
+        } else {
+            // pid  %cpu  rss(KB)  nombre
+            const m = texto.match(/^(\d+)\s+([\d.,]+)\s+(\d+)\s+(.*)$/);
+            if (m) lista.push({ nombre: m[4], pid: Number(m[1]), memoriaMB: redondear1(Number(m[3]) / 1024), cpu: redondear1(parseFloat(m[2].replace(',', '.'))) });
+        }
+    }
+    return lista;
+}
+
+function guardarProcesos(lista) {
+    procesosSistema = lista.length;
+    topProcesos = lista
+        .sort((a, b) => b.memoriaMB - a.memoriaMB)
+        .slice(0, 10)
+        .map(p => ({ ...p, estaApp: p.pid === process.pid }));
+}
+
+function contarProcesosSistema() {
+    if (process.platform === 'linux') {
+        try {
+            guardarProcesos(listarProcesosLinux());
+        } catch (e) { /* si /proc no está disponible, se conservan los valores anteriores */ }
+        return;
+    }
+    const [cmd, args] = process.platform === 'win32'
+        ? ['tasklist', ['/fo', 'csv', '/nh']]
+        : ['ps', ['-e', '-o', 'pid=,pcpu=,rss=,comm=']];
+    execFile(cmd, args, { timeout: 5000, windowsHide: true, maxBuffer: 5 * 1024 * 1024 }, (err, salida) => {
+        if (!err) guardarProcesos(interpretarProcesos(salida));
+    });
+}
+
+// Tareas que Node tiene pendientes (temporizadores, conexiones, lecturas...), agrupadas por tipo
+function tareasActivasPorTipo() {
+    if (typeof process.getActiveResourcesInfo !== 'function') return [];
+    const grupos = {};
+    for (const tipo of process.getActiveResourcesInfo()) grupos[tipo] = (grupos[tipo] || 0) + 1;
+    return Object.entries(grupos)
+        .map(([tipo, cantidad]) => ({ tipo, cantidad }))
+        .sort((a, b) => b.cantidad - a.cantidad);
+}
+
+// Hilos del proceso Node: solo disponible en Linux (/proc); en Windows/Mac devuelve null
+function contarHilosProceso() {
+    const m = (leerArchivo('/proc/self/status') || '').match(/^Threads:\s+(\d+)/m);
+    return m ? Number(m[1]) : null;
+}
+
+// ---------- Muestra periódica ----------
+function tomarMuestra() {
+    const ahora = process.hrtime.bigint();
+    const microsTranscurridos = Number(ahora - tPrev) / 1000;
+    tPrev = ahora;
+
+    // CPU del sistema (o del contenedor, si hay límites)
+    let cpuSistema = 0;
+    const contenedor = leerCpuContenedor();
+    if (contenedor && cpuContenedorPrev) {
+        nucleosEfectivos = contenedor.nucleos;
+        cpuSistema = microsTranscurridos > 0
+            ? ((contenedor.usoMicros - cpuContenedorPrev.usoMicros) / (microsTranscurridos * contenedor.nucleos)) * 100
+            : 0;
+    } else {
+        const cpu = leerTiemposCpu();
+        const dTotal = cpu.total - cpuEquipoPrev.total;
+        const dIdle = cpu.idle - cpuEquipoPrev.idle;
+        cpuEquipoPrev = cpu;
+        nucleosEfectivos = os.cpus().length;
+        cpuSistema = dTotal > 0 ? (1 - dIdle / dTotal) * 100 : 0;
+    }
+    cpuContenedorPrev = contenedor;
+
+    // CPU de este proceso, sobre la misma base de núcleos
+    const uso = process.cpuUsage();
+    const microsUsados = (uso.user - cpuProcesoPrev.uso.user) + (uso.system - cpuProcesoPrev.uso.system);
+    const microsProceso = Number(ahora - cpuProcesoPrev.t) / 1000;
+    cpuProcesoPrev = { uso, t: ahora };
+    const cpuProceso = microsProceso > 0 ? (microsUsados / microsProceso / nucleosEfectivos) * 100 : 0;
+
+    // Memoria
+    const mem = process.memoryUsage();
+    const memoria = leerMemoria();
+    entorno = memoria.origen;
+
+    // Carga del hilo principal (retraso del event loop)
+    // (el medidor ya incluye los 20 ms de su propia resolución, por eso se restan)
+    const retrasoMs = Math.max(0, retrasoEventLoop.mean / 1e6 - 20);
+    retrasoEventLoop.reset();
+
+    historialMonitoreo.push({
+        hora: Date.now(),
+        cpuSistema: redondear1(Math.min(Math.max(cpuSistema, 0), 100)),
+        cpuProceso: redondear1(Math.min(Math.max(cpuProceso, 0), 100)),
+        memSistemaPct: redondear1((memoria.usada / memoria.total) * 100),
+        memSistemaUsadaMB: aMB(memoria.usada),
+        memSistemaTotalMB: aMB(memoria.total),
+        rssMB: aMB(mem.rss),
+        heapUsadoMB: aMB(mem.heapUsed),
+        heapTotalMB: aMB(mem.heapTotal),
+        retrasoMs: Number.isFinite(retrasoMs) ? Math.round(retrasoMs * 100) / 100 : 0,
+        recursosActivos: typeof process.getActiveResourcesInfo === 'function'
+            ? process.getActiveResourcesInfo().length : null,
+        hilos: contarHilosProceso(),
+        procesosSistema
+    });
+    if (historialMonitoreo.length > MON_MAX_MUESTRAS) historialMonitoreo.shift();
+}
+
+contarProcesosSistema();
+setInterval(tomarMuestra, MON_INTERVALO_MS).unref();
+setInterval(contarProcesosSistema, 10000).unref();
+
+app.get('/api/monitoreo', autenticar, soloAdmin, (req, res) => {
+    res.json({
+        plataforma: `${os.type()} ${os.release()}`,
+        entorno,                                   // 'contenedor' o 'equipo'
+        nucleos: Math.round(nucleosEfectivos * 100) / 100,
+        nodeVersion: process.version,
+        uptimeSegundos: Math.round(process.uptime()),
+        intervaloMs: MON_INTERVALO_MS,
+        muestras: historialMonitoreo,
+        detalle: { procesos: topProcesos, tareasActivas: tareasActivasPorTipo() }
     });
 });
 
